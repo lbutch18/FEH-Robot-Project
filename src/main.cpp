@@ -8,20 +8,20 @@
 // FEHServo servo(FEHServo::Servo0);
 
 #define COUNTS_PER_INCH 33.7408479392
-#define COUNTS_PER_DEGREE 0.88333333333 // TEST
+#define COUNTS_PER_DEGREE 2.1111111111 // TEST
 FEHMotor leftMotor(FEHMotor::Motor0, 12.0);
-FEHMotor rightMotor(FEHMotor::Motor1, 12.0);
-DigitalEncoder leftEncoder(FEHIO::Pin0);
-DigitalEncoder rightEncoder(FEHIO::Pin1);
+FEHMotor rightMotor(FEHMotor::Motor3, 12.0); // PORT 1 BEING DIFFICULT // BACKWARDS
+DigitalEncoder leftEncoder(FEHIO::Pin8);
+DigitalEncoder rightEncoder(FEHIO::Pin9);
 
 /* Drive a set amount of inches with motors at set percent, then stop*/
 void driveThenStop(float inches, int percent) {
     leftEncoder.ResetCounts();
     rightEncoder.ResetCounts();
     leftMotor.SetPercent(percent);
-    rightMotor.SetPercent(percent);
+    rightMotor.SetPercent(-percent);
     float counts = inches * COUNTS_PER_INCH;
-    while (leftEncoder.Counts() + rightEncoder.Counts() < counts * 2);
+    while ((leftEncoder.Counts() + rightEncoder.Counts()) / 2.0 < counts);
     leftMotor.Stop();
     rightMotor.Stop();
 }
@@ -30,12 +30,42 @@ void driveThenStop(float inches, int percent) {
 void rotateInPlaceThenStop(float degrees, int percent) {
     leftEncoder.ResetCounts();
     rightEncoder.ResetCounts();
-    leftMotor.SetPercent(percent);
-    rightMotor.SetPercent(-percent);
-    float counts = degrees * COUNTS_PER_DEGREE;
-    while (leftEncoder.Counts() + rightEncoder.Counts() < counts * 2);
+    
+    float counts = fabs(degrees) * COUNTS_PER_DEGREE;
+    if (degrees < 0) { // LEFT
+        leftMotor.SetPercent(-percent);
+        rightMotor.SetPercent(-percent);
+    } else { // RIGHT
+        leftMotor.SetPercent(percent);
+        rightMotor.SetPercent(percent);
+    }
+    
+    while ((leftEncoder.Counts() + rightEncoder.Counts()) / 2.0 < counts);
     leftMotor.Stop();
     rightMotor.Stop();
+}
+
+void testShaftEncoder()
+{
+    LCD.Clear();
+    LCD.WriteLine("Testing shaft encoders");
+    leftEncoder.ResetCounts();
+    rightEncoder.ResetCounts();
+    while(true)
+    {
+        LCD.Clear();
+        LCD.WriteLine(leftEncoder.Counts());
+        LCD.WriteLine(rightEncoder.Counts());
+    }
+}
+
+void driveToWall() {
+    driveThenStop(32, 20);
+}
+
+void driveUpAndDownRamp() {
+    driveThenStop(30, 20);
+    driveThenStop(30, -20);
 }
 
 void ERCMain()
@@ -45,18 +75,7 @@ void ERCMain()
     int x, y;
     LCD.Clear();
     while(!LCD.Touch(&x, &y));
-    driveThenStop(6, 50);
-    LCD.WriteLine("Left: " + String(leftEncoder.Counts()));
-    LCD.WriteLine("Right: " + String(rightEncoder.Counts()));
+    driveToWall();
     while(!LCD.Touch(&x, &y));
-    LCD.Clear();
-    rotateInPlaceThenStop(90, 50);
-    LCD.WriteLine("Left: " + String(leftEncoder.Counts()));
-    LCD.WriteLine("Right: " + String(rightEncoder.Counts()));
-    while(!LCD.Touch(&x, &y));
-    LCD.Clear();
-    rotateInPlaceThenStop(-90, 50);
-    LCD.WriteLine("Left: " + String(leftEncoder.Counts()));
-    LCD.WriteLine("Right: " + String(rightEncoder.Counts()));
-
+    driveUpAndDownRamp();
 }
