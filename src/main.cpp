@@ -8,9 +8,10 @@
 // FEHServo servo(FEHServo::Servo0);
 
 #define COUNTS_PER_INCH 33.7408479392
-#define COUNTS_PER_DEGREE 2.1111111111 // TEST
+#define COUNTS_PER_DEGREE 2.33 // TEST
+#define COUNTS_PER_DEGREE_180 2.25 // NEED CORRECTIVE ALGO
 FEHMotor leftMotor(FEHMotor::Motor0, 12.0);
-FEHMotor rightMotor(FEHMotor::Motor3, 12.0); // PORT 1 BEING DIFFICULT // BACKWARDS
+FEHMotor rightMotor(FEHMotor::Motor3, 12.0); // BACKWARDS
 DigitalEncoder leftEncoder(FEHIO::Pin8);
 DigitalEncoder rightEncoder(FEHIO::Pin9);
 
@@ -59,13 +60,14 @@ void testShaftEncoder()
     }
 }
 
-void driveToWall() {
-    driveThenStop(32, 20);
+void driveToAndFromWall() {
+    driveThenStop(30, 20);
+    driveThenStop(25, -20);
 }
 
 void driveUpAndDownRamp() {
-    driveThenStop(30, 20);
-    driveThenStop(30, -20);
+    driveThenStop(30, 30);
+    driveThenStop(30, -30);
 }
 
 void ERCMain()
@@ -75,7 +77,7 @@ void ERCMain()
     int x, y;
     LCD.Clear();
     while(!LCD.Touch(&x, &y));
-    driveToWall();
-    while(!LCD.Touch(&x, &y));
+    driveToAndFromWall();
+    rotateInPlaceThenStop(90, 20);
     driveUpAndDownRamp();
 }
