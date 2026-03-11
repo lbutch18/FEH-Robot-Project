@@ -8,12 +8,24 @@
 // FEHServo servo(FEHServo::Servo0);
 
 #define COUNTS_PER_INCH 33.7408479392
-#define COUNTS_PER_DEGREE 2.33 // TEST
-#define COUNTS_PER_DEGREE_180 2.25 // NEED CORRECTIVE ALGO
+#define COUNTS_PER_DEGREE 2.1111111111 // TEST
+#define CDS_THRESHOLD_RED 2 // Update this with multiple
+#define CDS_THRESHOLD_BLUE 4 // Update this with multiple
 FEHMotor leftMotor(FEHMotor::Motor0, 12.0);
-FEHMotor rightMotor(FEHMotor::Motor3, 12.0); // BACKWARDS
+FEHMotor rightMotor(FEHMotor::Motor3, 12.0); // PORT 1 IS BACKWARDS
 DigitalEncoder leftEncoder(FEHIO::Pin8);
 DigitalEncoder rightEncoder(FEHIO::Pin9);
+AnalogInputPin CDSCell(FEHIO::Pin2);
+AnalogInputPin leftOpto(FEHIO::Pin3);
+AnalogInputPin rightOpto(FEHIO::Pin4);
+AnalogInputPin middleOpto(FEHIO::Pin5);
+
+enum LineState {
+    LEFT,
+    MIDDLE,
+    RIGHT
+};
+LineState state = MIDDLE;
 
 /* Drive a set amount of inches with motors at set percent, then stop*/
 void driveThenStop(float inches, int percent) {
@@ -46,38 +58,111 @@ void rotateInPlaceThenStop(float degrees, int percent) {
     rightMotor.Stop();
 }
 
-void testShaftEncoder()
-{
-    LCD.Clear();
-    LCD.WriteLine("Testing shaft encoders");
+void pivotThenStop(float degrees, int percent) {
     leftEncoder.ResetCounts();
     rightEncoder.ResetCounts();
-    while(true)
-    {
-        LCD.Clear();
-        LCD.WriteLine(leftEncoder.Counts());
-        LCD.WriteLine(rightEncoder.Counts());
+    
+    float counts = fabs(degrees) * COUNTS_PER_DEGREE;
+    if (degrees < 0) { // LEFT
+        leftMotor.SetPercent(0);
+        rightMotor.SetPercent(-percent);
+    } else { // RIGHT
+        leftMotor.SetPercent(percent);
+        rightMotor.SetPercent(0);
     }
+    
+    while ((leftEncoder.Counts() + rightEncoder.Counts()) / 2.0 < counts);
+    leftMotor.Stop();
+    rightMotor.Stop();
 }
 
-void driveToAndFromWall() {
+void driveUpRamp() {
     driveThenStop(30, 20);
-    driveThenStop(25, -20);
 }
 
-void driveUpAndDownRamp() {
-    driveThenStop(30, 30);
-    driveThenStop(30, -30);
+void followLineOnce(int straightPercent) {
+    float highThreshold = 5;
+    float lowThreshold = 3.3;
+
+    bool L= (leftOpto.Value()<highThreshold) && (leftOpto.Value()>lowThreshold);
+    bool M= (middleOpto.Value()<highThreshold) && (middleOpto.Value()>lowThreshold);
+    bool R= (rightOpto.Value()<highThreshold) && (rightOpto.Value()>lowThreshold);
+
+    if(M) {
+        state=MIDDLE;
+    }
+    else if(L) {
+        state=LEFT;
+    }
+    else if (R) {
+        state= RIGHT;
+    }
+
+    switch(state) {
+
+    // If I am in the middle of the line...
+    case MIDDLE:
+        leftMotor.SetPercent(-straightPercent);
+        rightMotor.SetPercent(-straightPercent);// drives straight
+    break;
+
+    case LEFT:
+        leftMotor.SetPercent(-straightPercent);
+        rightMotor.SetPercent(0); //turns wheels right
+    break;
+
+    case RIGHT:
+        leftMotor.SetPercent(0);
+        rightMotor.SetPercent(-straightPercent); //turns wheels left
+    break;
+
+    default: // Error
+        leftMotor.SetPercent(0); rightMotor.SetPercent(0);
+    break;
+    }
+    Sleep(.005);
+}
+
+void activateStartButton() {
+    driveThenStop(5, -30);
+}
+
+void rotateAfterStart() {
+    driveThenStop(5, 30);
+    pivotThenStop(90, 20);
+    pivotThenStop(-45, 20); // will likely need to adjust
+}
+
+bool followLineToLight() {
+    state = MIDDLE;
+    while (CDSCell.Value() > CDS_THRESHOLD_BLUE) { // change condition
+        followLineOnce(25);
+    }
+    return CDSCell.Value() > CDS_THRESHOLD_RED; // return true if red, false if blue -- change condition
+}
+
+void pressLightButton(bool colorIsRed) {
+    if (colorIsRed) {
+        // drive right to align with red button
+        pivotThenStop(45, 20);
+        pivotThenStop(-45, 20);
+    }
+    else {
+        //drive left to align with blue button
+        pivotThenStop(-45, 20);
+        pivotThenStop(45, 20);
+    }
+    driveThenStop(5, 20);
 }
 
 void ERCMain()
 {
-    // Shaft encoder testing
-    
-    int x, y;
-    LCD.Clear();
-    while(!LCD.Touch(&x, &y));
-    driveToAndFromWall();
-    rotateInPlaceThenStop(90, 20);
-    driveUpAndDownRamp();
+    RCS.InitializeTouchMenu("D4");
+    while(CDSCell.Value() > CDS_THRESHOLD_RED); // Wait for start light
+    activateStartButton();
+    rotateAfterStart();
+    driveUpRamp();
+    bool colorIsRed = followLineToLight(); // display color of light on LCD
+    pressLightButton(colorIsRed);
+
 }
