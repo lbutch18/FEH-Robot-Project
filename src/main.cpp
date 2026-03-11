@@ -9,8 +9,8 @@
 
 #define COUNTS_PER_INCH 33.7408479392
 #define COUNTS_PER_DEGREE 2.1111111111 // TEST
-#define CDS_THRESHOLD_RED 2 // Update this with multiple
-#define CDS_THRESHOLD_BLUE 4 // Update this with multiple
+#define CDS_THRESHOLD_RED 2
+#define CDS_THRESHOLD_BLUE 4 
 FEHMotor leftMotor(FEHMotor::Motor0, 12.0);
 FEHMotor rightMotor(FEHMotor::Motor3, 12.0); // PORT 1 IS BACKWARDS
 DigitalEncoder leftEncoder(FEHIO::Pin8);
@@ -88,11 +88,11 @@ void followLineOnce(int straightPercent) {
     bool M= (middleOpto.Value()<highThreshold) && (middleOpto.Value()>lowThreshold);
     bool R= (rightOpto.Value()<highThreshold) && (rightOpto.Value()>lowThreshold);
 
-    if(M) {
-        state=MIDDLE;
-    }
-    else if(L) {
+    if(L) {
         state=LEFT;
+    }
+    else if(M) {
+        state=MIDDLE;
     }
     else if (R) {
         state= RIGHT;
@@ -133,12 +133,23 @@ void rotateAfterStart() {
     pivotThenStop(-45, 20); // will likely need to adjust
 }
 
-bool followLineToLight() {
+// Returns true if red light, false if blue light, and displays color on LCD
+bool getCDSValueAndDisplayColor() {
+    float value = CDSCell.Value();
+    if (value > CDS_THRESHOLD_RED) {
+        LCD.WriteLine("Light color: Blue");
+        return false;
+    } else {
+        LCD.WriteLine("Light color: Red");
+        return true;
+    }
+}
+
+void followLineToLight() {
     state = MIDDLE;
     while (CDSCell.Value() > CDS_THRESHOLD_BLUE) { // change condition
         followLineOnce(25);
     }
-    return CDSCell.Value() > CDS_THRESHOLD_RED; // return true if red, false if blue -- change condition
 }
 
 void pressLightButton(bool colorIsRed) {
@@ -162,7 +173,8 @@ void ERCMain()
     activateStartButton();
     rotateAfterStart();
     driveUpRamp();
-    bool colorIsRed = followLineToLight(); // display color of light on LCD
+    followLineToLight();
+    bool colorIsRed = getCDSValueAndDisplayColor();
     pressLightButton(colorIsRed);
 
 }
