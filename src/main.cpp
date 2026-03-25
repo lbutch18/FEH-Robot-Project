@@ -9,14 +9,14 @@
 
 #define COUNTS_PER_INCH 33.7408479392
 #define COUNTS_PER_DEGREE 2.1111111111 // TEST
-#define CDS_THRESHOLD_RED 2
-#define CDS_THRESHOLD_BLUE 4 
+#define CDS_THRESHOLD_RED 1.4
+#define CDS_THRESHOLD_BLUE 2.2
 FEHMotor leftMotor(FEHMotor::Motor0, 12.0);
-FEHMotor rightMotor(FEHMotor::Motor3, 12.0); // PORT 1 IS BACKWARDS
-DigitalEncoder leftEncoder(FEHIO::Pin8);
+FEHMotor rightMotor(FEHMotor::Motor3, 12.0); // BACKWARDS
+DigitalEncoder leftEncoder(FEHIO::Pin12);
 DigitalEncoder rightEncoder(FEHIO::Pin9);
 AnalogInputPin CDSCell(FEHIO::Pin2);
-AnalogInputPin leftOpto(FEHIO::Pin3);
+AnalogInputPin leftOpto(FEHIO::Pin0);
 AnalogInputPin rightOpto(FEHIO::Pin4);
 AnalogInputPin middleOpto(FEHIO::Pin5);
 
@@ -27,6 +27,17 @@ enum LineState {
 };
 LineState state = MIDDLE;
 
+void testOptosensors() {
+    int x, y;
+    while(true) {
+        while(!LCD.Touch(&x, &y));
+        LCD.Clear();
+        LCD.WriteLine(leftOpto.Value());
+        LCD.WriteLine(middleOpto.Value());
+        LCD.WriteLine(rightOpto.Value());
+    }
+}
+
 /* Drive a set amount of inches with motors at set percent, then stop*/
 void driveThenStop(float inches, int percent) {
     leftEncoder.ResetCounts();
@@ -34,7 +45,21 @@ void driveThenStop(float inches, int percent) {
     leftMotor.SetPercent(percent);
     rightMotor.SetPercent(-percent);
     float counts = inches * COUNTS_PER_INCH;
-    while ((leftEncoder.Counts() + rightEncoder.Counts()) / 2.0 < counts);
+    while ((leftEncoder.Counts() + rightEncoder.Counts()) / 2.0 < counts) {
+        if (leftEncoder.Counts() > rightEncoder.Counts()) {
+            leftMotor.SetPercent(percent - 3);
+            rightMotor.SetPercent(-percent);
+        } else if (rightEncoder.Counts() > leftEncoder.Counts()) {
+            leftMotor.SetPercent(percent);
+            rightMotor.SetPercent(-percent + 3);
+        } else {
+            leftMotor.SetPercent(percent);
+            rightMotor.SetPercent(-percent);
+        }
+        LCD.Clear();
+        LCD.WriteLine(leftEncoder.Counts());
+        LCD.WriteLine(rightEncoder.Counts());
+    }
     leftMotor.Stop();
     rightMotor.Stop();
 }
@@ -77,37 +102,40 @@ void pivotThenStop(float degrees, int percent) {
 }
 
 void driveUpRamp() {
-    driveThenStop(30, 20);
+    driveThenStop(35, 20);
 }
 
 void followLineOnce(int straightPercent) {
     float highThreshold = 5;
-    float lowThreshold = 3.3;
+    float lowThreshold = 4.65;
 
     bool L= (leftOpto.Value()<highThreshold) && (leftOpto.Value()>lowThreshold);
     bool M= (middleOpto.Value()<highThreshold) && (middleOpto.Value()>lowThreshold);
     bool R= (rightOpto.Value()<highThreshold) && (rightOpto.Value()>lowThreshold);
 
-    if(L) {
-        state=LEFT;
+    if (M) {
+        state = MIDDLE;
     }
-    else if(M) {
-        state=MIDDLE;
+    else if (L && M) {
+         state = MIDDLE;
     }
-    else if (R) {
-        state= RIGHT;
+    else if (L && !R) {
+        state = RIGHT;
+    }
+    else if (R && M) {
+        state = MIDDLE;
     }
 
     switch(state) {
 
     // If I am in the middle of the line...
     case MIDDLE:
-        leftMotor.SetPercent(-straightPercent);
+        leftMotor.SetPercent(straightPercent);
         rightMotor.SetPercent(-straightPercent);// drives straight
     break;
 
     case LEFT:
-        leftMotor.SetPercent(-straightPercent);
+        leftMotor.SetPercent(straightPercent);
         rightMotor.SetPercent(0); //turns wheels right
     break;
 
@@ -117,20 +145,20 @@ void followLineOnce(int straightPercent) {
     break;
 
     default: // Error
-        leftMotor.SetPercent(0); rightMotor.SetPercent(0);
+        leftMotor.SetPercent(0); 
+        rightMotor.SetPercent(0);
     break;
     }
-    Sleep(.005);
 }
 
 void activateStartButton() {
-    driveThenStop(5, -30);
+    driveThenStop(1, -20);
 }
 
-void rotateAfterStart() {
-    driveThenStop(5, 30);
-    pivotThenStop(90, 20);
-    pivotThenStop(-45, 20); // will likely need to adjust
+void rotateAfterStartM2() {
+    pivotThenStop(80, 16);
+    driveThenStop(1, 16);
+    pivotThenStop(-29, 16);
 }
 
 // Returns true if red light, false if blue light, and displays color on LCD
@@ -148,33 +176,69 @@ bool getCDSValueAndDisplayColor() {
 void followLineToLight() {
     state = MIDDLE;
     while (CDSCell.Value() > CDS_THRESHOLD_BLUE) { // change condition
-        followLineOnce(25);
+        followLineOnce(16);
     }
+    leftMotor.SetPercent(0);
+    rightMotor.SetPercent(0);
+    Sleep(.5);
 }
 
 void pressLightButton(bool colorIsRed) {
     if (colorIsRed) {
         // drive right to align with red button
-        pivotThenStop(45, 20);
-        pivotThenStop(-45, 20);
+        pivotThenStop(45, 16);
+        pivotThenStop(-50, 16);
     }
     else {
         //drive left to align with blue button
         pivotThenStop(-45, 20);
-        pivotThenStop(45, 20);
+        pivotThenStop(50, 20);
     }
-    driveThenStop(5, 20);
+    driveThenStop(2, 30);
+}
+
+void driveToLight() {
+    rotateInPlaceThenStop(-100, 20);
+    leftMotor.SetPercent(16);
+    rightMotor.SetPercent(-16);
+    while (CDSCell.Value() > CDS_THRESHOLD_BLUE);
+    leftMotor.Stop();
+    rightMotor.Stop();
+    Sleep(.5);
+}
+
+void followLineToEnd() {
+    state = MIDDLE;
+    while (true) { // change condition
+        followLineOnce(16);
+    }
 }
 
 void ERCMain()
 {
-    RCS.InitializeTouchMenu("D4");
-    while(CDSCell.Value() > CDS_THRESHOLD_RED); // Wait for start light
-    activateStartButton();
-    rotateAfterStart();
-    driveUpRamp();
-    followLineToLight();
-    bool colorIsRed = getCDSValueAndDisplayColor();
-    pressLightButton(colorIsRed);
+    //testOptosensors();
 
+    //RCS.InitializeTouchMenu("D4");
+    int x, y;
+    while(!LCD.Touch(&x, &y)); // Wait for user to touch LCD to start program
+
+    //while(CDSCell.Value() > CDS_THRESHOLD_RED); // Wait for start light
+    //activateStartButton();
+    
+    /* MILESTONE 2 */
+    // rotateAfterStartM2();
+    // driveUpRamp();
+    // driveToLight();
+    // bool colorIsRed = getCDSValueAndDisplayColor();
+    // pressLightButton(colorIsRed);
+    // driveThenStop(36, -20);
+    // pivotThenStop(-90, 16);
+    // driveThenStop(30, 16);
+
+    /* MILESTONE 3 */
+    // driveThenStop(25, 16);
+    // rotateInPlaceThenStop(-45, 16);
+    // driveThenStop(20, 16);
+    rightMotor.SetPercent(16);
+    leftMotor.SetPercent(16);
 }
