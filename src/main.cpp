@@ -47,11 +47,11 @@ void driveThenStop(float inches, int percent) {
     float counts = inches * COUNTS_PER_INCH;
     while ((leftEncoder.Counts() + rightEncoder.Counts()) / 2.0 < counts) {
         if (leftEncoder.Counts() > rightEncoder.Counts()) {
-            leftMotor.SetPercent(percent - 3);
+            leftMotor.SetPercent(percent - 2);
             rightMotor.SetPercent(-percent);
         } else if (rightEncoder.Counts() > leftEncoder.Counts()) {
             leftMotor.SetPercent(percent);
-            rightMotor.SetPercent(-percent + 3);
+            rightMotor.SetPercent(-percent + 2);
         } else {
             leftMotor.SetPercent(percent);
             rightMotor.SetPercent(-percent);
@@ -101,8 +101,26 @@ void pivotThenStop(float degrees, int percent) {
     rightMotor.Stop();
 }
 
+void inversePivotThenStop(float degrees, int percent) {
+    leftEncoder.ResetCounts();
+    rightEncoder.ResetCounts();
+    
+    float counts = fabs(degrees) * COUNTS_PER_DEGREE;
+    if (degrees < 0) { // LEFT
+        leftMotor.SetPercent(-percent);
+        rightMotor.SetPercent(0);
+    } else { // RIGHT
+        leftMotor.SetPercent(0);
+        rightMotor.SetPercent(percent);
+    }
+    
+    while ((leftEncoder.Counts() + rightEncoder.Counts()) / 2.0 < counts);
+    leftMotor.Stop();
+    rightMotor.Stop();
+}
+
 void driveUpRamp() {
-    driveThenStop(35, 20);
+    driveThenStop(34, 20);
 }
 
 void followLineOnce(int straightPercent) {
@@ -152,7 +170,7 @@ void followLineOnce(int straightPercent) {
 }
 
 void activateStartButton() {
-    driveThenStop(1, -20);
+    driveThenStop(2, -28);
 }
 
 void rotateAfterStartM2() {
@@ -214,16 +232,43 @@ void followLineToEnd() {
     }
 }
 
+void testRCS() {
+    int x, y;
+    while(!LCD.Touch(&x, &y));
+    while(true) {
+        while(!LCD.Touch(&x, &y));
+        LCD.Clear();
+        RCS.RequestPosition(false);
+
+        Sleep(.5);
+
+        
+        // Check if position data has arrived
+        RCSPose* pose = RCS.Position();
+        if (pose != nullptr) {
+            LCD.WriteRC(pose->x, 0, 0);
+            LCD.WriteRC(pose->y, 1, 0);
+            LCD.WriteRC(pose->heading, 2, 0);
+        } else {
+            LCD.WriteLine("Position not ready");
+        }
+    }
+}
+
 void ERCMain()
 {
-    //testOptosensors();
-
-    //RCS.InitializeTouchMenu("D4");
+    // testOptosensors();
+    // testGUI();
+    // testRCS();
+    // RCS.InitializeTouchMenu("D4");
+    // RCS.DisableRateLimit();
+    
     int x, y;
-    while(!LCD.Touch(&x, &y)); // Wait for user to touch LCD to start program
-
-    //while(CDSCell.Value() > CDS_THRESHOLD_RED); // Wait for start light
-    //activateStartButton();
+    while(!LCD.Touch(&x, &y)); // Wait for initial touch to start program
+    // while(CDSCell.Value() > CDS_THRESHOLD_RED); // Wait for start light
+    activateStartButton();
+    
+    /* MILESTONE 4 */
     
     /* MILESTONE 2 */
     // rotateAfterStartM2();
@@ -236,9 +281,22 @@ void ERCMain()
     // driveThenStop(30, 16);
 
     /* MILESTONE 3 */
-    // driveThenStop(25, 16);
-    // rotateInPlaceThenStop(-45, 16);
-    // driveThenStop(20, 16);
-    rightMotor.SetPercent(16);
-    leftMotor.SetPercent(16);
+    // rotateAfterStartM2();
+    // driveUpRamp();
+    // rotateInPlaceThenStop(-90, 16);
+    // driveThenStop(8, -22);
+    // pivotThenStop(-15, 16);
+    // driveThenStop(10, 16);
+    // rotateInPlaceThenStop(15, 16);
+    // driveThenStop(10, 16);
+    // driveThenStop(4, -16);
+    // pivotThenStop(30, 16);
+    // driveThenStop(1, 16);
+    // pivotThenStop(-30, 16);
+    // driveThenStop(1, 16);
+    // pivotThenStop(-30, 16);
+    // driveThenStop(1, 16);
+    // inversePivotThenStop(30, 16);
+    // driveThenStop(20, -16);
+
 }
