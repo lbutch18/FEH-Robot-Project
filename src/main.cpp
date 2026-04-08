@@ -8,17 +8,21 @@
 // FEHServo servo(FEHServo::Servo0);
 
 #define COUNTS_PER_INCH 33.7408479392
-#define COUNTS_PER_DEGREE 2.1111111111 // TEST
+#define COUNTS_PER_DEGREE 2.25 // TEST
 #define CDS_THRESHOLD_RED 1.4
 #define CDS_THRESHOLD_BLUE 2.2
+#define SECONDS_PER_INCH 1.0 // Adjust based on arm speed
 FEHMotor leftMotor(FEHMotor::Motor0, 12.0);
 FEHMotor rightMotor(FEHMotor::Motor3, 12.0); // BACKWARDS
-DigitalEncoder leftEncoder(FEHIO::Pin12);
+DigitalEncoder leftEncoder(FEHIO::Pin13);
 DigitalEncoder rightEncoder(FEHIO::Pin9);
 AnalogInputPin CDSCell(FEHIO::Pin2);
 AnalogInputPin leftOpto(FEHIO::Pin0);
 AnalogInputPin rightOpto(FEHIO::Pin4);
 AnalogInputPin middleOpto(FEHIO::Pin5);
+FEHServo smallArm(FEHServo::Servo0); // Continuous
+FEHMotor largeArm(FEHMotor::Motor1, 5.0);
+FEHMotor compostBinWheel(FEHMotor::Motor2, 5.0);
 
 enum LineState {
     LEFT,
@@ -26,6 +30,17 @@ enum LineState {
     RIGHT
 };
 LineState state = MIDDLE;
+
+float getNormalizedRotation(float currentHeading, float targetHeading) {
+    float rotation = targetHeading - currentHeading;
+    if (rotation < -180) {
+        rotation += 360;
+    }
+    else if (rotation > 180) {
+        rotation -= 360;
+    }
+    return rotation;
+}
 
 void testOptosensors() {
     int x, y;
@@ -45,21 +60,40 @@ void driveThenStop(float inches, int percent) {
     leftMotor.SetPercent(percent);
     rightMotor.SetPercent(-percent);
     float counts = inches * COUNTS_PER_INCH;
-    while ((leftEncoder.Counts() + rightEncoder.Counts()) / 2.0 < counts) {
-        if (leftEncoder.Counts() > rightEncoder.Counts()) {
-            leftMotor.SetPercent(percent - 2);
-            rightMotor.SetPercent(-percent);
-        } else if (rightEncoder.Counts() > leftEncoder.Counts()) {
-            leftMotor.SetPercent(percent);
-            rightMotor.SetPercent(-percent + 2);
-        } else {
-            leftMotor.SetPercent(percent);
-            rightMotor.SetPercent(-percent);
+    if (percent > 0) {
+        while ((leftEncoder.Counts() + rightEncoder.Counts()) / 2.0 < counts) {
+            if (leftEncoder.Counts() > rightEncoder.Counts() + 5) {
+                leftMotor.SetPercent(percent);
+                rightMotor.SetPercent(-percent - 3);
+            } else if (rightEncoder.Counts() > leftEncoder.Counts() + 5) {
+                leftMotor.SetPercent(percent + 3);
+                rightMotor.SetPercent(-percent);
+            } else {
+                leftMotor.SetPercent(percent);
+                rightMotor.SetPercent(-percent);
+            }
+        }
+        LCD.Clear();
+        LCD.WriteLine(leftEncoder.Counts());
+        LCD.WriteLine(rightEncoder.Counts());
+    } else { // driving backwards
+        while ((leftEncoder.Counts() + rightEncoder.Counts()) / 2.0 < counts) {
+            if (leftEncoder.Counts() > rightEncoder.Counts() + 5) {
+                leftMotor.SetPercent(percent + 3);
+                rightMotor.SetPercent(-percent);
+            } else if (rightEncoder.Counts() > leftEncoder.Counts() + 5) {
+                leftMotor.SetPercent(percent);
+                rightMotor.SetPercent(-percent - 3);
+            } else {
+                leftMotor.SetPercent(percent);
+                rightMotor.SetPercent(-percent);
+            }
         }
         LCD.Clear();
         LCD.WriteLine(leftEncoder.Counts());
         LCD.WriteLine(rightEncoder.Counts());
     }
+
     leftMotor.Stop();
     rightMotor.Stop();
 }
@@ -77,8 +111,18 @@ void rotateInPlaceThenStop(float degrees, int percent) {
         leftMotor.SetPercent(percent);
         rightMotor.SetPercent(percent);
     }
-    
-    while ((leftEncoder.Counts() + rightEncoder.Counts()) / 2.0 < counts);
+    while ((leftEncoder.Counts() + rightEncoder.Counts()) / 2.0 < counts) {
+        if (leftEncoder.Counts() > rightEncoder.Counts() + 3) {
+                leftMotor.SetPercent(percent);
+                rightMotor.SetPercent(-percent - 2);
+            } else if (rightEncoder.Counts() > leftEncoder.Counts() + 3) {
+                leftMotor.SetPercent(percent + 2);
+                rightMotor.SetPercent(-percent);
+            } else {
+                leftMotor.SetPercent(percent);
+                rightMotor.SetPercent(-percent);
+            }
+    }
     leftMotor.Stop();
     rightMotor.Stop();
 }
@@ -120,7 +164,7 @@ void inversePivotThenStop(float degrees, int percent) {
 }
 
 void driveUpRamp() {
-    driveThenStop(34, 20);
+    driveThenStop(32, 20);
 }
 
 void followLineOnce(int straightPercent) {
@@ -170,7 +214,7 @@ void followLineOnce(int straightPercent) {
 }
 
 void activateStartButton() {
-    driveThenStop(2, -28);
+    driveThenStop(2, -22);
 }
 
 void rotateAfterStartM2() {
@@ -255,20 +299,123 @@ void testRCS() {
     }
 }
 
+void moveLargeArmInches(float inches) {
+    if (inches < 0) {
+        largeArm.SetPercent(35);
+    } else {
+        largeArm.SetPercent(-35);
+    }
+    Sleep(fabs(inches) * SECONDS_PER_INCH); // Adjust sleep time based on arm speed
+    largeArm.Stop();
+}
+
+void driveToPosition(float targetX, float targetY, float targetHeading) {
+    // Get current position and heading
+    float currentX;
+    float currentY;
+    float currentHeading;
+    RCSPose* pose = RCS.RequestPosition();
+    if (pose != nullptr) {
+        currentX = pose->x;
+        currentY = pose->y;
+        currentHeading = pose->heading;
+    } else {
+        LCD.WriteLine("No RCS response");
+        Sleep(5);
+    }
+
+    // rotate to FACE target -- targetheading needs updating with trig
+    float faceTargetHeading = atan2(targetY - currentY, targetX - currentX) * 180 / M_PI;
+    float rotation = getNormalizedRotation(currentHeading, faceTargetHeading);
+    rotateInPlaceThenStop(rotation, 16);
+}
+
+void driveToCompostBin() {
+    driveThenStop(3.35, 16);
+    pivotThenStop(-45, 16);
+    driveThenStop(11.75, 16);
+    pivotThenStop(-15, 16);
+}
+
+void spinCompostBin() {
+    rightMotor.SetPercent(-12);
+    Sleep(.25);
+    compostBinWheel.SetPercent(-80);
+    Sleep(1.85);
+    compostBinWheel.Stop();
+    Sleep(0.25);
+    compostBinWheel.SetPercent(80);
+    Sleep(1.7);
+    compostBinWheel.Stop();
+    rightMotor.Stop();
+    rightEncoder.ResetCounts();
+    leftEncoder.ResetCounts();
+}
+
+void driveBackToStartFromBin() {
+    driveThenStop(2, -26);
+    rotateInPlaceThenStop(30, 16);
+    driveThenStop(8, -16);
+    rotateInPlaceThenStop(45, 16);
+    driveThenStop(12, -16);
+}
+
 void ERCMain()
 {
     // testOptosensors();
     // testGUI();
-    // testRCS();
     // RCS.InitializeTouchMenu("D4");
     // RCS.DisableRateLimit();
-    
     int x, y;
     while(!LCD.Touch(&x, &y)); // Wait for initial touch to start program
-    // while(CDSCell.Value() > CDS_THRESHOLD_RED); // Wait for start light
+    // while(CDSCell.Value() > 2.5); // Wait for start light
     activateStartButton();
-    
+    driveToCompostBin();
+    spinCompostBin();
+    driveBackToStartFromBin();
+
+
     /* MILESTONE 4 */
+    // driveThenStop(22, 16);
+    // rotateInPlaceThenStop(-48, 16);
+    // //correctWithRCS(12.23, 20.59, 90);
+    // Sleep(.75);
+    // // pick up apple bucket 
+    // driveThenStop(1.25, 16);
+    // Sleep(.5);
+    // moveLargeArmInches(2.25);
+    // Sleep(.5);
+    // // RCS
+    // rotateInPlaceThenStop(20, 16);
+    // driveThenStop(19.5, -16);
+    // rotateInPlaceThenStop(58, 16);
+    // Sleep(.5);
+    // //correctWithRCS(32.13, 13.77, 0);
+    // Sleep(.5);
+    // driveThenStop(31, 25); 
+    // Sleep(.5);
+    // // RCS
+    // rotateInPlaceThenStop(-45, 16);
+    // driveThenStop(7.5, 16);
+    // rotateInPlaceThenStop(48, 16);
+    // driveThenStop(9.5, 25);
+    // Sleep(.75);
+    // moveLargeArmInches(-2.25);
+    // driveThenStop(2, -20);
+    // Sleep(.5);
+    // moveLargeArmInches(2.25);
+    // rotateInPlaceThenStop(-40, 16);
+    // driveThenStop(15, 20);
+
+
+
+    // RCS
+    // drop apple bucket
+    // RCS
+    // follow line to correct lever
+    // move lever down, wait 5, move lever up
+    // drive back to top of ramp
+    // RCS
     
     /* MILESTONE 2 */
     // rotateAfterStartM2();
