@@ -8,7 +8,7 @@
 // FEHServo servo(FEHServo::Servo0);
 
 #define COUNTS_PER_INCH 33.7408479392
-#define COUNTS_PER_DEGREE 2.25 // TEST
+#define COUNTS_PER_DEGREE 2.3275
 #define CDS_THRESHOLD_RED 1.4
 #define CDS_THRESHOLD_BLUE 2.2
 #define SECONDS_PER_INCH 1.0 // Adjust based on arm speed
@@ -326,12 +326,16 @@ void moveLargeArmInches(float inches) {
 }
 
 void driveToPosition(float targetX, float targetY, float targetHeading) {
+    const float ANGLE_TOLERANCE = 1.0;
+    const float DISTANCE_TOLERANCE = 0.25;
+    
+    float faceTargetHeading;
+    float rotation;
     for (int k = 0; k < 2; k++) {
         LCD.Clear();
         float currentX;
         float currentY;
         float currentHeading;
-        float rotation;
         for (int i = 0; i < 2; i++) {
             // Get current position and heading
             RCSPose* pose = RCS.RequestPosition();
@@ -352,35 +356,41 @@ void driveToPosition(float targetX, float targetY, float targetHeading) {
             LCD.WriteLine(currentHeading);
 
             // rotate to FACE target
-            float faceTargetHeading = atan2(currentX - targetX, targetY - currentY) * 180 / M_PI;
+            faceTargetHeading = atan2(currentX - targetX, targetY - currentY) * 180 / M_PI;
             if (faceTargetHeading < 0) {
                 faceTargetHeading += 360;
             }
             rotation = -getNormalizedRotation(currentHeading, faceTargetHeading);
             LCD.WriteLine("Rotation: ");
             LCD.WriteLine(rotation);
+            
+            if (fabs(rotation) < ANGLE_TOLERANCE) {
+                break;
+            };
             rotateInPlaceThenStop(rotation, 16);
         }
         Sleep(.1);
 
         // drive to target
         float distance = sqrt(pow(targetX - currentX, 2) + pow(targetY - currentY, 2));
+        if (distance < DISTANCE_TOLERANCE) {
+            break;
+        }
         driveThenStop(distance, 16);
 
         Sleep(.1);
     }
-    // After driving
-    RCS.RequestPosition();
+    
+    // Turn to target heading
+    RCSPose* pose = RCS.RequestPosition();
     float time = TimeNow();
     while(RCS.Position() == nullptr && TimeNow() - time < 3);
-    RCSPose* pose = RCS.Position();
-    float currentHeading;
     if (pose != nullptr) {
-        currentHeading = pose->heading;
+        float rotation = -getNormalizedRotation(pose->heading, targetHeading);
+        if (fabs(rotation) >= ANGLE_TOLERANCE) {  // ADD THIS
+            rotateInPlaceThenStop(rotation, 16);
+        }
     }
-    float rotation = -getNormalizedRotation(currentHeading, targetHeading);
-    rotateInPlaceThenStop(rotation, 16);
-
 }
 
 void driveToCompostBin() {
@@ -418,6 +428,15 @@ void pickUpAppleBucket() {
 
 void ERCMain()
 {
+    for (int i = 0; i < 180; i++) {
+        rotateInPlaceThenStop(2, 16);
+        Sleep(.25);
+    }
+    for (int i = 0; i < 16; i++) {
+        rotateInPlaceThenStop(-2, 16);
+        Sleep(.25);
+    }
+    while(true);
     // testOptosensors();
     // TestGUI();
 
