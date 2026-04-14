@@ -325,69 +325,79 @@ void moveLargeArmInches(float inches) {
     largeArm.Stop();
 }
 
-void driveToPosition(float targetX, float targetY, float targetHeading) {
-    const float ANGLE_TOLERANCE = 1.0;
-    const float DISTANCE_TOLERANCE = 0.25;
-    
-    float faceTargetHeading;
-    float rotation;
+void driveToTarget(float targetX, float targetY, float angleTolerance, float distanceTolerance) {
     for (int k = 0; k < 2; k++) {
         LCD.Clear();
-        float currentX;
-        float currentY;
-        float currentHeading;
-        for (int i = 0; i < 2; i++) {
-            // Get current position and heading
-            RCSPose* pose = RCS.RequestPosition();
-            float time = TimeNow();
-            while(RCS.Position() == nullptr && TimeNow() - time < 3);
         
-            if (pose != nullptr) {
-                currentX = pose->x;
-                currentY = pose->y;
-                currentHeading = pose->heading;
-            } else {
-                LCD.WriteLine("No RCS response");
-                continue;
-            }
-            LCD.WriteLine("Current pos: ");
-            LCD.WriteLine(currentX);
-            LCD.WriteLine(currentY);
-            LCD.WriteLine(currentHeading);
-
-            // rotate to FACE target
-            faceTargetHeading = atan2(currentX - targetX, targetY - currentY) * 180 / M_PI;
+        // Get position and check distance
+        RCSPose* pose = RCS.RequestPosition();
+        float time = TimeNow();
+        while (RCS.Position() == nullptr && TimeNow() - time < 3);
+        
+        if (pose == nullptr) {
+            LCD.WriteLine("No RCS response");
+            continue;
+        }
+        
+        float currentX = pose->x;
+        float currentY = pose->y;
+        float currentHeading = pose->heading;
+        
+        LCD.WriteLine("Current pos: ");
+        LCD.WriteLine(currentX);
+        LCD.WriteLine(currentY);
+        LCD.WriteLine(currentHeading);
+        
+        float distance = sqrt(pow(targetX - currentX, 2) + pow(targetY - currentY, 2));
+        if (distance < distanceTolerance) {
+            return;
+        }
+        
+        // Face target
+        for (int i = 0; i < 2; i++) {
+            float faceTargetHeading = atan2(currentX - targetX, targetY - currentY) * 180 / M_PI;
             if (faceTargetHeading < 0) {
                 faceTargetHeading += 360;
             }
-            rotation = -getNormalizedRotation(currentHeading, faceTargetHeading);
+            float rotation = -getNormalizedRotation(currentHeading, faceTargetHeading);
             LCD.WriteLine("Rotation: ");
             LCD.WriteLine(rotation);
             
-            if (fabs(rotation) < ANGLE_TOLERANCE) {
+            if (fabs(rotation) < angleTolerance) {
                 break;
-            };
+            }
             rotateInPlaceThenStop(rotation, 16);
+            
+            if (i == 0) {
+                pose = RCS.RequestPosition();
+                time = TimeNow();
+                while (RCS.Position() == nullptr && TimeNow() - time < 3);
+                
+                if (pose != nullptr) {
+                    currentHeading = pose->heading;
+                }
+            }
         }
+        
         Sleep(.1);
-
-        // drive to target
-        float distance = sqrt(pow(targetX - currentX, 2) + pow(targetY - currentY, 2));
-        if (distance < DISTANCE_TOLERANCE) {
-            break;
-        }
         driveThenStop(distance, 16);
-
         Sleep(.1);
     }
+}
+
+void driveToPosition(float targetX, float targetY, float targetHeading) {
+    const float ANGLE_TOLERANCE = 1.5;
+    const float DISTANCE_TOLERANCE = 0.25;
+    
+    driveToTarget(targetX, targetY, ANGLE_TOLERANCE, DISTANCE_TOLERANCE);
     
     // Turn to target heading
     RCSPose* pose = RCS.RequestPosition();
     float time = TimeNow();
-    while(RCS.Position() == nullptr && TimeNow() - time < 3);
+    while (RCS.Position() == nullptr && TimeNow() - time < 3);
     if (pose != nullptr) {
         float rotation = -getNormalizedRotation(pose->heading, targetHeading);
-        if (fabs(rotation) >= ANGLE_TOLERANCE) {  // ADD THIS
+        if (fabs(rotation) >= ANGLE_TOLERANCE) {
             rotateInPlaceThenStop(rotation, 16);
         }
     }
