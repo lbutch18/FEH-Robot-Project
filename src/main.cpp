@@ -236,13 +236,10 @@ void followLineOnce(int straightPercent) {
 }
 
 void activateStartButton() {
-    driveThenStop(2, -22);
-}
-
-void rotateAfterStartM2() {
-    pivotThenStop(80, 16);
-    driveThenStop(1, 16);
-    pivotThenStop(-29, 16);
+    float time = TimeNow();
+    leftMotor.SetPercent(-20);
+    rightMotor.SetPercent(20);
+    while(TimeNow() - time < .75);
 }
 
 // Returns true if red light, false if blue light, and displays color on LCD
@@ -320,9 +317,9 @@ void testRCS() {
 
 void moveLargeArmInches(float inches) {
     if (inches < 0) {
-        largeArm.SetPercent(35);
-    } else {
         largeArm.SetPercent(-35);
+    } else {
+        largeArm.SetPercent(35);
     }
     Sleep(fabs(inches) * SECONDS_PER_INCH); // Adjust sleep time based on arm speed
     largeArm.Stop();
@@ -371,25 +368,25 @@ void driveToPosition(float targetX, float targetY, float targetHeading) {
         driveThenStop(distance, 16);
 
         Sleep(.1);
-
-        // After driving
-        RCS.RequestPosition();
-        float time = TimeNow();
-        while(RCS.Position() == nullptr && TimeNow() - time < 3);
-        RCSPose* pose = RCS.Position();
-        if (pose != nullptr) {
-            currentHeading = pose->heading;
-        }
-        rotation = -getNormalizedRotation(currentHeading, targetHeading);
-        rotateInPlaceThenStop(rotation, 16);
     }
+    // After driving
+    RCS.RequestPosition();
+    float time = TimeNow();
+    while(RCS.Position() == nullptr && TimeNow() - time < 3);
+    RCSPose* pose = RCS.Position();
+    float currentHeading;
+    if (pose != nullptr) {
+        currentHeading = pose->heading;
+    }
+    float rotation = -getNormalizedRotation(currentHeading, targetHeading);
+    rotateInPlaceThenStop(rotation, 16);
 
 }
 
 void driveToCompostBin() {
-    driveThenStop(3.35, 16);
+    driveThenStop(3.5, 16);
     pivotThenStop(-45, 16);
-    driveThenStop(11.75, 16);
+    driveThenStop(11.5, 16);
     pivotThenStop(-15, 16);
 }
 
@@ -408,12 +405,15 @@ void spinCompostBin() {
     leftEncoder.ResetCounts();
 }
 
-void driveBackToStartFromBin() {
-    driveThenStop(2, -26);
-    rotateInPlaceThenStop(30, 16);
-    driveThenStop(8, -16);
-    rotateInPlaceThenStop(45, 16);
-    driveThenStop(12, -16);
+void driveToAppleBucket() {
+    driveToPosition(13.09, 19.64, 90);
+}
+
+void pickUpAppleBucket() {
+    driveThenStop(3, 16);
+    Sleep(.35);
+    moveLargeArmInches(2.25);
+    Sleep(.35);
 }
 
 void ERCMain()
@@ -428,16 +428,14 @@ void ERCMain()
     int x, y;
     // 30 SECOND TIMEOUT MAX
     while(!LCD.Touch(&x, &y)); // Wait for initial touch to start program
-    LCD.WriteLine("1: driving to position (13.77, 13.23, 90)");
-    driveToPosition(13.77, 13.23, 180);
-    Sleep(10000.0);
-    // while(CDSCell.Value() > 2.5); // Wait for start light
-
-    /* MILESTONE 5*/
+    while(CDSCell.Value() > 2.5); // Wait for start light
     activateStartButton();
     driveToCompostBin();
     spinCompostBin();
-    driveBackToStartFromBin();
+    rotateInPlaceThenStop(30, 16);
+    driveToAppleBucket();
+    pickUpAppleBucket();
+
 
     /* MILESTONE 4 */
     // driveThenStop(22, 16);
@@ -446,9 +444,9 @@ void ERCMain()
     // Sleep(.75);
     // // pick up apple bucket 
     // driveThenStop(1.25, 16);
-    // Sleep(.5);
+    // Sleep(.35);
     // moveLargeArmInches(2.25);
-    // Sleep(.5);
+    // Sleep(.35);
     // // RCS
     // rotateInPlaceThenStop(20, 16);
     // driveThenStop(19.5, -16);
