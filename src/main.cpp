@@ -448,6 +448,10 @@ void correctY(float targetY) {
         while (RCS.Position() == nullptr && TimeNow() - time < 3);
         if (pose != nullptr && pose->heading >= 0) {
             float distance = targetY - pose->y;
+            float percent = 12;
+            if (pose-> heading > 90 && pose->heading < 270) { // facing south, backwards is positive
+                percent = -percent;
+            }
             if (fabs(distance) >= DISTANCE_TOLERANCE) {
                 LCD.WriteLine("Current Y: ");
                 LCD.WriteLine(pose->y);
@@ -477,13 +481,17 @@ void correctX(float targetX) {
         while (RCS.Position() == nullptr && TimeNow() - time < 3);
         if (pose != nullptr && pose->x >= 0) {
             float distance = targetX - pose->x;
+            float percent = 12;
+            if (pose-> heading > 180) { // facing left, backwards is positive
+                percent = -percent;
+            }
             if (fabs(distance) >= DISTANCE_TOLERANCE) {
                 LCD.WriteLine("Current X: ");
                 LCD.WriteLine(pose->x);
                 if (distance > 0) {
-                    correctionDriveThenStop(.25, -12);
+                    correctionDriveThenStop(.25, -percent);
                 } else {
-                    correctionDriveThenStop(.25, 12);
+                    correctionDriveThenStop(.25, percent);
                 }
                 LCD.WriteLine("Correcting X by: ");
                 LCD.WriteLine(distance);
