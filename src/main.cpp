@@ -66,36 +66,44 @@ void driveThenStop(float inches, int percent) {
         while ((leftEncoder.Counts() + rightEncoder.Counts()) / 2.0 < counts) {
             if (leftEncoder.Counts() > rightEncoder.Counts() + 5) {
                 leftMotor.SetPercent(percent);
-                rightMotor.SetPercent(-percent - 3);
+                rightMotor.SetPercent(-percent - 4);
             } else if (rightEncoder.Counts() > leftEncoder.Counts() + 5) {
-                leftMotor.SetPercent(percent + 3);
+                leftMotor.SetPercent(percent + 4);
                 rightMotor.SetPercent(-percent);
             } else {
                 leftMotor.SetPercent(percent);
                 rightMotor.SetPercent(-percent);
             }
         }
-        LCD.Clear();
-        LCD.WriteLine(leftEncoder.Counts());
-        LCD.WriteLine(rightEncoder.Counts());
     } else { // driving backwards
         while ((leftEncoder.Counts() + rightEncoder.Counts()) / 2.0 < counts) {
             if (leftEncoder.Counts() > rightEncoder.Counts() + 5) {
-                leftMotor.SetPercent(percent + 3);
+                leftMotor.SetPercent(percent + 4);
                 rightMotor.SetPercent(-percent);
             } else if (rightEncoder.Counts() > leftEncoder.Counts() + 5) {
                 leftMotor.SetPercent(percent);
-                rightMotor.SetPercent(-percent - 3);
+                rightMotor.SetPercent(-percent - 4);
             } else {
                 leftMotor.SetPercent(percent);
                 rightMotor.SetPercent(-percent);
             }
         }
-        LCD.Clear();
-        LCD.WriteLine(leftEncoder.Counts());
-        LCD.WriteLine(rightEncoder.Counts());
     }
 
+    leftMotor.Stop();
+    rightMotor.Stop();
+}
+
+/* Drive a set amount of inches with motors at set percent, then stop*/
+void correctionDriveThenStop(float inches, int percent) {
+    leftEncoder.ResetCounts();
+    rightEncoder.ResetCounts();
+    leftMotor.SetPercent(percent);
+    rightMotor.SetPercent(-percent);
+    float counts = inches * COUNTS_PER_INCH;
+    leftMotor.SetPercent(percent);
+    rightMotor.SetPercent(-percent);
+    while ((leftEncoder.Counts() + rightEncoder.Counts()) / 2.0 < counts);
     leftMotor.Stop();
     rightMotor.Stop();
 }
@@ -186,7 +194,7 @@ void inversePivotThenStop(float degrees, int percent) {
 }
 
 void driveUpRamp() {
-    driveThenStop(32, 20);
+    driveThenStop(28, 30);
 }
 
 void followLineOnce(int straightPercent) {
@@ -272,14 +280,14 @@ void pressLightButton(bool colorIsRed) {
     }
     else {
         //drive left to align with blue button
-        pivotThenStop(-45, 20);
-        pivotThenStop(50, 20);
+        pivotThenStop(-45, 25);
+        pivotThenStop(50, 25);
     }
     driveThenStop(2, 30);
 }
 
 void driveToLight() {
-    rotateInPlaceThenStop(-100, 20);
+    rotateInPlaceThenStop(-100, 25);
     leftMotor.SetPercent(16);
     rightMotor.SetPercent(-16);
     while (CDSCell.Value() > CDS_THRESHOLD_BLUE);
@@ -305,7 +313,7 @@ void testRCS() {
         
         // Check if position data has arrived
         RCSPose* pose = RCS.Position();
-        if (pose != nullptr) {
+        if (pose != nullptr && pose->heading >= 0) {
             LCD.WriteRC(pose->x, 0, 0);
             LCD.WriteRC(pose->y, 1, 0);
             LCD.WriteRC(pose->heading, 2, 0);
@@ -326,6 +334,7 @@ void moveLargeArmInches(float inches) {
 }
 
 void driveToTarget(float targetX, float targetY, float angleTolerance, float distanceTolerance) {
+    Sleep(.5);
     for (int k = 0; k < 2; k++) {
         LCD.Clear();
         
@@ -369,19 +378,19 @@ void driveToTarget(float targetX, float targetY, float angleTolerance, float dis
             rotateInPlaceThenStop(rotation, 16);
             
             if (i == 0) {
+                Sleep(.5);
                 pose = RCS.RequestPosition();
                 time = TimeNow();
                 while (RCS.Position() == nullptr && TimeNow() - time < 3);
                 
-                if (pose != nullptr) {
+                if (pose != nullptr && pose->heading >= 0) {
                     currentHeading = pose->heading;
                 }
             }
         }
         
-        Sleep(.1);
         driveThenStop(distance, 16);
-        Sleep(.1);
+        Sleep(.5);
     }
 }
 
@@ -392,10 +401,11 @@ void driveToPosition(float targetX, float targetY, float targetHeading) {
     driveToTarget(targetX, targetY, ANGLE_TOLERANCE, DISTANCE_TOLERANCE);
     
     // Turn to target heading
+    Sleep(.5);
     RCSPose* pose = RCS.RequestPosition();
     float time = TimeNow();
     while (RCS.Position() == nullptr && TimeNow() - time < 3);
-    if (pose != nullptr) {
+    if (pose != nullptr && pose->heading >= 0) {
         float rotation = -getNormalizedRotation(pose->heading, targetHeading);
         if (fabs(rotation) >= ANGLE_TOLERANCE) {
             rotateInPlaceThenStop(rotation, 16);
@@ -403,21 +413,104 @@ void driveToPosition(float targetX, float targetY, float targetHeading) {
     }
 }
 
+void correctHeading(float targetHeading) {
+    Sleep(.5);
+    const float ANGLE_TOLERANCE = .65;
+    
+    for (int i = 0; i < 3; i++) {
+        RCSPose* pose = RCS.RequestPosition();
+        float time = TimeNow();
+        while (RCS.Position() == nullptr && TimeNow() - time < 3);
+        if (pose != nullptr && pose->heading >= 0) {
+            float rotation = -getNormalizedRotation(pose->heading, targetHeading);
+            if (fabs(rotation) >= ANGLE_TOLERANCE) {
+                rotateInPlaceThenStop(rotation, 16);
+                LCD.WriteLine("Current heading: ");
+                LCD.WriteLine(pose->heading);
+                LCD.WriteLine("Correcting heading by: ");
+                LCD.WriteLine(rotation);
+            } else {
+                return;
+            }
+        }
+        Sleep(.5);
+    }
+}
+
+// Precondition: heading about 0 or 180
+void correctY(float targetY) {
+    Sleep(.5);
+    const float DISTANCE_TOLERANCE = 0.25;
+
+    for (int i = 0; i < 3; i++) {
+        RCSPose* pose = RCS.RequestPosition();
+        float time = TimeNow();
+        while (RCS.Position() == nullptr && TimeNow() - time < 3);
+        if (pose != nullptr && pose->heading >= 0) {
+            float distance = targetY - pose->y;
+            if (fabs(distance) >= DISTANCE_TOLERANCE) {
+                LCD.WriteLine("Current Y: ");
+                LCD.WriteLine(pose->y);
+                if (distance > 0) {
+                    correctionDriveThenStop(.25, 12);
+                } else {
+                    correctionDriveThenStop(.25, -12);
+                }
+                LCD.WriteLine("Correcting Y by: ");
+                LCD.WriteLine(distance);
+            } else {
+                return;
+            }
+        }
+        Sleep(.5);
+    }
+}
+
+// Precondition: heading about 90 or 270
+void correctX(float targetX) {
+    Sleep(.5);
+    const float DISTANCE_TOLERANCE = 0.25;
+
+    for (int i = 0; i < 3; i++) {
+        RCSPose* pose = RCS.RequestPosition();
+        float time = TimeNow();
+        while (RCS.Position() == nullptr && TimeNow() - time < 3);
+        if (pose != nullptr && pose->x >= 0) {
+            float distance = targetX - pose->x;
+            if (fabs(distance) >= DISTANCE_TOLERANCE) {
+                LCD.WriteLine("Current X: ");
+                LCD.WriteLine(pose->x);
+                if (distance > 0) {
+                    correctionDriveThenStop(.25, -12);
+                } else {
+                    correctionDriveThenStop(.25, 12);
+                }
+                LCD.WriteLine("Correcting X by: ");
+                LCD.WriteLine(distance);
+            } else {
+                return;
+            }
+        }
+        Sleep(.5);
+    }
+}
+
 void driveToCompostBin() {
-    driveThenStop(3.5, 16);
-    pivotThenStop(-45, 16);
-    driveThenStop(11.5, 16);
-    pivotThenStop(-15, 16);
+    driveThenStop(4, 16);
+    pivotThenStop(-39, 16);
+    // correctHeading(90);
+    driveThenStop(11.5, 20);
+    pivotThenStop(-14.5, 16);
 }
 
 void spinCompostBin() {
     rightMotor.SetPercent(-12);
     Sleep(.25);
-    compostBinWheel.SetPercent(-80);
-    Sleep(1.85);
+    compostBinWheel.SetPercent(80);
+    Sleep(2.0);
     compostBinWheel.Stop();
     Sleep(0.25);
-    compostBinWheel.SetPercent(80);
+    compostBinWheel.SetPercent(-80);
     Sleep(1.7);
     compostBinWheel.Stop();
     rightMotor.Stop();
@@ -426,27 +519,53 @@ void spinCompostBin() {
 }
 
 void driveToAppleBucket() {
-    driveToPosition(13.09, 19.64, 90);
+    rotateInPlaceThenStop(120, 16);
+    driveThenStop(9.85, 25);
+    rotateInPlaceThenStop(-25, 16);
+    correctHeading(0);
+    correctY(19.3);
+    rotateInPlaceThenStop(-90, 16);
+    correctHeading(90);
 }
 
 void pickUpAppleBucket() {
-    driveThenStop(3, 16);
+    driveThenStop(3, 20);
+    correctX(13.5);
+    driveThenStop(2, 20);
     Sleep(.35);
     moveLargeArmInches(2.25);
     Sleep(.35);
 }
 
+void driveToBottomOfRamp() {
+    driveThenStop(1, -25);
+    rotateInPlaceThenStop(45, 20);
+    driveThenStop(6, -25);
+    rotateInPlaceThenStop(-45, 20);
+    correctHeading(90);
+    driveThenStop(11, -25);
+    correctX(32.5);
+    rotateInPlaceThenStop(90, 20);
+    correctHeading(0);
+    correctY(11.8);
+}
+
+void driveToCrateAndDropAppleBucket() {
+    rotateInPlaceThenStop(-60, 20);
+    driveThenStop(6, 25);
+    rotateInPlaceThenStop(60, 20);
+    driveThenStop(9.5, 25);
+    Sleep(.1);
+    moveLargeArmInches(-2.25);
+    driveThenStop(2, -25);
+    Sleep(.5);
+    moveLargeArmInches(2.25);
+    rotateInPlaceThenStop(-40, 20);
+    driveThenStop(15, 25);
+}
+
 void ERCMain()
 {
-    for (int i = 0; i < 180; i++) {
-        rotateInPlaceThenStop(2, 16);
-        Sleep(.25);
-    }
-    for (int i = 0; i < 16; i++) {
-        rotateInPlaceThenStop(-2, 16);
-        Sleep(.25);
-    }
-    while(true);
     // testOptosensors();
     // TestGUI();
 
@@ -454,17 +573,19 @@ void ERCMain()
     // RCS readings, light readings, etc.
     // WaitForFinalAction();
     // RCS.DisableRateLimit();
-    int x, y;
+    // int x, y;
     // 30 SECOND TIMEOUT MAX
-    while(!LCD.Touch(&x, &y)); // Wait for initial touch to start program
-    while(CDSCell.Value() > 2.5); // Wait for start light
+    // while(!LCD.Touch(&x, &y)); // Wait for initial touch to start program
+    while(CDSCell.Value() > CDS_THRESHOLD_RED); // Wait for start light
     activateStartButton();
     driveToCompostBin();
     spinCompostBin();
-    rotateInPlaceThenStop(30, 16);
+    rotateInPlaceThenStop(26, 16);
     driveToAppleBucket();
     pickUpAppleBucket();
-
+    driveToBottomOfRamp();
+    driveUpRamp();
+    driveToCrateAndDropAppleBucket();
 
     /* MILESTONE 4 */
     // driveThenStop(22, 16);
