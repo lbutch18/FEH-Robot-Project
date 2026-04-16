@@ -94,6 +94,45 @@ void driveThenStop(float inches, int percent) {
     rightMotor.Stop();
 }
 
+void driveThenStopWithTimeout(float inches, int percent) {
+    leftEncoder.ResetCounts();
+    rightEncoder.ResetCounts();
+    leftMotor.SetPercent(percent);
+    rightMotor.SetPercent(-percent);
+    float counts = inches * COUNTS_PER_INCH;
+    float startTime = TimeNow();
+    if (percent > 0) {
+        while ((leftEncoder.Counts() + rightEncoder.Counts()) / 2.0 < counts && TimeNow() - startTime < 4) {
+            if (leftEncoder.Counts() > rightEncoder.Counts() + 5) {
+                leftMotor.SetPercent(percent);
+                rightMotor.SetPercent(-percent - 4);
+            } else if (rightEncoder.Counts() > leftEncoder.Counts() + 5) {
+                leftMotor.SetPercent(percent + 4);
+                rightMotor.SetPercent(-percent);
+            } else {
+                leftMotor.SetPercent(percent);
+                rightMotor.SetPercent(-percent);
+            }
+        }
+    } else { // driving backwards
+        while ((leftEncoder.Counts() + rightEncoder.Counts()) / 2.0 < counts) {
+            if (leftEncoder.Counts() > rightEncoder.Counts() + 5) {
+                leftMotor.SetPercent(percent + 4);
+                rightMotor.SetPercent(-percent);
+            } else if (rightEncoder.Counts() > leftEncoder.Counts() + 5) {
+                leftMotor.SetPercent(percent);
+                rightMotor.SetPercent(-percent - 4);
+            } else {
+                leftMotor.SetPercent(percent);
+                rightMotor.SetPercent(-percent);
+            }
+        }
+    }
+
+    leftMotor.Stop();
+    rightMotor.Stop();
+}
+
 /* Drive a set amount of inches with motors at set percent, then stop*/
 void correctionDriveThenStop(float inches, int percent) {
     leftEncoder.ResetCounts();
@@ -275,8 +314,8 @@ void followLineToLight() {
 void pressLightButton(bool colorIsRed) {
     if (colorIsRed) {
         // drive right to align with red button
-        pivotThenStop(45, 16);
-        pivotThenStop(-50, 16);
+        pivotThenStop(45, 25);
+        pivotThenStop(-50, 25);
     }
     else {
         //drive left to align with blue button
@@ -284,16 +323,6 @@ void pressLightButton(bool colorIsRed) {
         pivotThenStop(50, 25);
     }
     driveThenStop(2, 30);
-}
-
-void driveToLight() {
-    rotateInPlaceThenStop(-100, 25);
-    leftMotor.SetPercent(16);
-    rightMotor.SetPercent(-16);
-    while (CDSCell.Value() > CDS_THRESHOLD_BLUE);
-    leftMotor.Stop();
-    rightMotor.Stop();
-    Sleep(.5);
 }
 
 void followLineToEnd() {
@@ -334,7 +363,7 @@ void moveLargeArmInches(float inches) {
 }
 
 void driveToTarget(float targetX, float targetY, float angleTolerance, float distanceTolerance) {
-    Sleep(.5);
+    Sleep(.25);
     for (int k = 0; k < 2; k++) {
         LCD.Clear();
         
@@ -378,7 +407,7 @@ void driveToTarget(float targetX, float targetY, float angleTolerance, float dis
             rotateInPlaceThenStop(rotation, 16);
             
             if (i == 0) {
-                Sleep(.5);
+                Sleep(.25);
                 pose = RCS.RequestPosition();
                 time = TimeNow();
                 while (RCS.Position() == nullptr && TimeNow() - time < 3);
@@ -390,7 +419,7 @@ void driveToTarget(float targetX, float targetY, float angleTolerance, float dis
         }
         
         driveThenStop(distance, 16);
-        Sleep(.5);
+        Sleep(.25);
     }
 }
 
@@ -401,7 +430,7 @@ void driveToPosition(float targetX, float targetY, float targetHeading) {
     driveToTarget(targetX, targetY, ANGLE_TOLERANCE, DISTANCE_TOLERANCE);
     
     // Turn to target heading
-    Sleep(.5);
+    Sleep(.25);
     RCSPose* pose = RCS.RequestPosition();
     float time = TimeNow();
     while (RCS.Position() == nullptr && TimeNow() - time < 3);
@@ -414,7 +443,7 @@ void driveToPosition(float targetX, float targetY, float targetHeading) {
 }
 
 void correctHeading(float targetHeading) {
-    Sleep(.5);
+    Sleep(.35);
     const float ANGLE_TOLERANCE = .65;
     
     for (int i = 0; i < 3; i++) {
@@ -433,13 +462,13 @@ void correctHeading(float targetHeading) {
                 return;
             }
         }
-        Sleep(.5);
+        Sleep(.35);
     }
 }
 
 // Precondition: heading about 0 or 180
 void correctY(float targetY) {
-    Sleep(.5);
+    Sleep(.35);
     const float DISTANCE_TOLERANCE = 0.25;
 
     for (int i = 0; i < 3; i++) {
@@ -456,9 +485,9 @@ void correctY(float targetY) {
                 LCD.WriteLine("Current Y: ");
                 LCD.WriteLine(pose->y);
                 if (distance > 0) {
-                    correctionDriveThenStop(.25, 12);
+                    correctionDriveThenStop(.3, 12);
                 } else {
-                    correctionDriveThenStop(.25, -12);
+                    correctionDriveThenStop(.3, -12);
                 }
                 LCD.WriteLine("Correcting Y by: ");
                 LCD.WriteLine(distance);
@@ -466,13 +495,13 @@ void correctY(float targetY) {
                 return;
             }
         }
-        Sleep(.5);
+        Sleep(.35);
     }
 }
 
 // Precondition: heading about 90 or 270
 void correctX(float targetX) {
-    Sleep(.5);
+    Sleep(.35);
     const float DISTANCE_TOLERANCE = 0.25;
 
     for (int i = 0; i < 3; i++) {
@@ -489,9 +518,9 @@ void correctX(float targetX) {
                 LCD.WriteLine("Current X: ");
                 LCD.WriteLine(pose->x);
                 if (distance > 0) {
-                    correctionDriveThenStop(.25, -percent);
+                    correctionDriveThenStop(.35, -percent);
                 } else {
-                    correctionDriveThenStop(.25, percent);
+                    correctionDriveThenStop(.35, percent);
                 }
                 LCD.WriteLine("Correcting X by: ");
                 LCD.WriteLine(distance);
@@ -499,16 +528,39 @@ void correctX(float targetX) {
                 return;
             }
         }
-        Sleep(.5);
+        Sleep(.35);
     }
 }
 
 void driveToCompostBin() {
-    driveThenStop(4, 16);
-    pivotThenStop(-39, 16);
+    driveThenStop(5.35, 16);
+    pivotThenStop(-37.75, 16);
     // correctHeading(90);
-    driveThenStop(11.5, 20);
-    pivotThenStop(-14.5, 16);
+    driveThenStop(12.5, 20);
+    pivotThenStop(-13.5, 16);
+}
+
+void driveToLight(int percent) {
+    rotateInPlaceThenStop(-110, percent);
+    correctHeading(90);
+    leftMotor.SetPercent(percent);
+    rightMotor.SetPercent(-percent);
+    while (CDSCell.Value() > CDS_THRESHOLD_BLUE) {
+        if (leftEncoder.Counts() > rightEncoder.Counts() + 5) {
+            leftMotor.SetPercent(percent);
+            rightMotor.SetPercent(-percent - 4);
+        } else if (rightEncoder.Counts() > leftEncoder.Counts() + 5) {
+            leftMotor.SetPercent(percent + 4);
+            rightMotor.SetPercent(-percent);
+        } else {
+            leftMotor.SetPercent(percent);
+            rightMotor.SetPercent(-percent);
+        }
+    }
+    leftMotor.Stop();
+    rightMotor.Stop();
+    driveThenStop(.25, -percent);
+    Sleep(.35);
 }
 
 void spinCompostBin() {
@@ -528,18 +580,19 @@ void spinCompostBin() {
 
 void driveToAppleBucket() {
     rotateInPlaceThenStop(120, 16);
-    driveThenStop(9.85, 25);
+    driveThenStop(11.75, 25);
     rotateInPlaceThenStop(-25, 16);
     correctHeading(0);
-    correctY(19.3);
+    correctY(19.2);
     rotateInPlaceThenStop(-90, 16);
     correctHeading(90);
 }
 
 void pickUpAppleBucket() {
-    driveThenStop(3, 20);
-    correctX(13.5);
-    driveThenStop(2, 20);
+    driveThenStop(4, 20);
+    correctX(13.25);
+    correctHeading(90);
+    driveThenStopWithTimeout(2.75, 20);
     Sleep(.35);
     moveLargeArmInches(2.25);
     Sleep(.35);
@@ -551,25 +604,24 @@ void driveToBottomOfRamp() {
     driveThenStop(6, -25);
     rotateInPlaceThenStop(-45, 20);
     correctHeading(90);
-    driveThenStop(11, -25);
+    driveThenStop(15, -25);
     correctX(32.5);
     rotateInPlaceThenStop(90, 20);
-    correctHeading(0);
     correctY(11.8);
 }
 
-void driveToCrateAndDropAppleBucket() {
-    rotateInPlaceThenStop(-60, 20);
-    driveThenStop(6, 25);
-    rotateInPlaceThenStop(60, 20);
-    driveThenStop(9.5, 25);
+void driveToTableAndDropAppleBucket() {
+    rotateInPlaceThenStop(45, 16);
+    driveThenStop(3, 25);
+    rotateInPlaceThenStop(-45, 16);
+    moveLargeArmInches(3.5);
+    driveThenStop(2.75, 25);
     Sleep(.1);
-    moveLargeArmInches(-2.25);
-    driveThenStop(2, -25);
+    leftMotor.SetPercent(16);
+    rightMotor.SetPercent(-16);
     Sleep(.5);
-    moveLargeArmInches(2.25);
-    rotateInPlaceThenStop(-40, 20);
-    driveThenStop(15, 25);
+    moveLargeArmInches(-.75);
+    driveThenStop(3, -25);
 }
 
 void ERCMain()
@@ -593,7 +645,25 @@ void ERCMain()
     pickUpAppleBucket();
     driveToBottomOfRamp();
     driveUpRamp();
-    driveToCrateAndDropAppleBucket();
+    driveToTableAndDropAppleBucket();
+    driveToLight(25);
+    bool colorIsRed = getCDSValueAndDisplayColor();
+    pressLightButton(colorIsRed);
+    /* //SKELETON CODE: NEED MORE SPECIFIC VALUES
+    driveToLight(25);
+    bool colorIsRed = getCDSValueAndDisplayColor();
+    pressLightButton(colorIsRed);
+    driveToLeftLever();
+    pushLeftLeverDown();
+    driveToWindow();
+    openWindow();
+    // move more?
+    closeWindow();
+    driveToTopOfRamp();
+    driveDownRampAndEnd();
+    */
+
+
 
     /* MILESTONE 4 */
     // driveThenStop(22, 16);
