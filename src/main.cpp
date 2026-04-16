@@ -370,7 +370,7 @@ void driveToTarget(float targetX, float targetY, float angleTolerance, float dis
         // Get position and check distance
         RCSPose* pose = RCS.RequestPosition();
         float time = TimeNow();
-        while (RCS.Position() == nullptr && TimeNow() - time < 3);
+        while (RCS.Position() == nullptr && TimeNow() - time < 2);
         
         if (pose == nullptr) {
             LCD.WriteLine("No RCS response");
@@ -410,7 +410,7 @@ void driveToTarget(float targetX, float targetY, float angleTolerance, float dis
                 Sleep(.25);
                 pose = RCS.RequestPosition();
                 time = TimeNow();
-                while (RCS.Position() == nullptr && TimeNow() - time < 3);
+                while (RCS.Position() == nullptr && TimeNow() - time < 2);
                 
                 if (pose != nullptr && pose->heading >= 0) {
                     currentHeading = pose->heading;
@@ -433,7 +433,7 @@ void driveToPosition(float targetX, float targetY, float targetHeading) {
     Sleep(.25);
     RCSPose* pose = RCS.RequestPosition();
     float time = TimeNow();
-    while (RCS.Position() == nullptr && TimeNow() - time < 3);
+    while (RCS.Position() == nullptr && TimeNow() - time < 2);
     if (pose != nullptr && pose->heading >= 0) {
         float rotation = -getNormalizedRotation(pose->heading, targetHeading);
         if (fabs(rotation) >= ANGLE_TOLERANCE) {
@@ -449,7 +449,7 @@ void correctHeading(float targetHeading) {
     for (int i = 0; i < 3; i++) {
         RCSPose* pose = RCS.RequestPosition();
         float time = TimeNow();
-        while (RCS.Position() == nullptr && TimeNow() - time < 3);
+        while (RCS.Position() == nullptr && TimeNow() - time < 2);
         if (pose != nullptr && pose->heading >= 0) {
             float rotation = -getNormalizedRotation(pose->heading, targetHeading);
             if (fabs(rotation) >= ANGLE_TOLERANCE) {
@@ -474,7 +474,7 @@ void correctY(float targetY) {
     for (int i = 0; i < 3; i++) {
         RCSPose* pose = RCS.RequestPosition();
         float time = TimeNow();
-        while (RCS.Position() == nullptr && TimeNow() - time < 3);
+        while (RCS.Position() == nullptr && TimeNow() - time < 2);
         if (pose != nullptr && pose->heading >= 0) {
             float distance = targetY - pose->y;
             float percent = 12;
@@ -507,7 +507,7 @@ void correctX(float targetX) {
     for (int i = 0; i < 3; i++) {
         RCSPose* pose = RCS.RequestPosition();
         float time = TimeNow();
-        while (RCS.Position() == nullptr && TimeNow() - time < 3);
+        while (RCS.Position() == nullptr && TimeNow() - time < 2);
         if (pose != nullptr && pose->x >= 0) {
             float distance = targetX - pose->x;
             float percent = 12;
