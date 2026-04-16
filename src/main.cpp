@@ -94,7 +94,7 @@ void driveThenStop(float inches, int percent) {
     rightMotor.Stop();
 }
 
-void driveThenStopWithTimeout(float inches, int percent) {
+void driveThenStopWithTimeout(float inches, int percent, float timeout) {
     leftEncoder.ResetCounts();
     rightEncoder.ResetCounts();
     leftMotor.SetPercent(percent);
@@ -102,7 +102,7 @@ void driveThenStopWithTimeout(float inches, int percent) {
     float counts = inches * COUNTS_PER_INCH;
     float startTime = TimeNow();
     if (percent > 0) {
-        while ((leftEncoder.Counts() + rightEncoder.Counts()) / 2.0 < counts && TimeNow() - startTime < 4) {
+        while ((leftEncoder.Counts() + rightEncoder.Counts()) / 2.0 < counts && TimeNow() - startTime < timeout) {
             if (leftEncoder.Counts() > rightEncoder.Counts() + 5) {
                 leftMotor.SetPercent(percent);
                 rightMotor.SetPercent(-percent - 4);
@@ -115,7 +115,7 @@ void driveThenStopWithTimeout(float inches, int percent) {
             }
         }
     } else { // driving backwards
-        while ((leftEncoder.Counts() + rightEncoder.Counts()) / 2.0 < counts) {
+        while ((leftEncoder.Counts() + rightEncoder.Counts()) / 2.0 < counts && TimeNow() - startTime < timeout) {
             if (leftEncoder.Counts() > rightEncoder.Counts() + 5) {
                 leftMotor.SetPercent(percent + 4);
                 rightMotor.SetPercent(-percent);
@@ -545,6 +545,8 @@ void driveToLight(int percent) {
     correctHeading(90);
     leftMotor.SetPercent(percent);
     rightMotor.SetPercent(-percent);
+    leftEncoder.ResetCounts();
+    rightEncoder.ResetCounts();
     while (CDSCell.Value() > CDS_THRESHOLD_BLUE) {
         if (leftEncoder.Counts() > rightEncoder.Counts() + 5) {
             leftMotor.SetPercent(percent);
@@ -592,7 +594,7 @@ void pickUpAppleBucket() {
     driveThenStop(4, 20);
     correctX(13.25);
     correctHeading(90);
-    driveThenStopWithTimeout(2.75, 20);
+    driveThenStopWithTimeout(2.75, 20, 3);
     Sleep(.35);
     moveLargeArmInches(2.25);
     Sleep(.35);
@@ -624,6 +626,77 @@ void driveToTableAndDropAppleBucket() {
     driveThenStop(3, -25);
 }
 
+void driveToWindow() {
+    /* Goal is to run into window / flowerbox to align Y coord since we 
+    just came from button press which is inexact */
+    driveThenStop(3, -25); // Test this
+    rotateInPlaceThenStop(-90, 20);
+    correctHeading(180);
+    driveThenStopWithTimeout(9, -25, 4); // Test this (increase/decrease distance and/or timeout)
+    driveThenStop(4, -25); // Test this -- backs up from wall to reasonable spot for arm
+    rotateInPlaceThenStop(-90, 20);
+    correctHeading(270);
+    driveThenStop(5, 25); // test this -- drives just past window handle
+}
+
+void moveSmallArm(float seconds) {
+    if (seconds < 0) {
+        smallArm.SetDegree(105);
+    } else {
+        smallArm.SetDegree(75);
+    }
+    Sleep(fabs(seconds)); // Adjust sleep time based on arm speed
+    smallArm.SetDegree(90);
+}
+
+void openAndCloseWindow() {
+    /* CLOSE WINDOW */
+    moveSmallArm(1); // moves small arm for one second, see above -- may need to reverse direction and also need to make sure degree values are correct in the actual function (continuous servo uses degrees instead of percents, 0% should be 90 deg theoretically)
+
+    leftEncoder.ResetCounts();
+    rightEncoder.ResetCounts();
+    leftMotor.SetPercent(-25);
+    rightMotor.SetPercent(25);
+    while (!RCS.isWindowOpen()) { // drive backward with adjustments until window sensor is triggered -- may need to counterrotate if getting stuck
+        if (leftEncoder.Counts() > rightEncoder.Counts() + 5) {
+            leftMotor.SetPercent(-(25 + 4));
+            rightMotor.SetPercent(25);
+        } else if (rightEncoder.Counts() > leftEncoder.Counts() + 5) {
+           leftMotor.SetPercent(-25);
+            rightMotor.SetPercent(-(-25 - 4));
+        } else {
+            leftMotor.SetPercent(-25);
+            rightMotor.SetPercent(25);
+        }
+    }
+    leftMotor.Stop();
+    rightMotor.Stop();
+    Sleep(.2);
+
+    /* OPEN WINDOW */
+    moveSmallArm(-1); // move small arm back to original position -- again may need to reverse direction and adjust degree values
+    driveThenStop(2, -25);
+    moveSmallArm(1); // reopen arm
+
+    driveThenStop(10, 25); // drive forward to close window -- will almost definitely need to adjust distance
+
+    Sleep(.2);
+    moveSmallArm(-1); // move small arm back to original position -- again may need to reverse direction and adjust degree values
+
+    // See how thrown off heading is if we get stuck on the end here, could rotate, drive rerotate, check heading
+}
+
+void driveToTopOfRamp() {
+    // literally just ram ts into the wall and back up/rotate
+    driveThenStopWithTimeout(12, 25, 4); // adjust distance and timeout as needed
+    driveThenStop(3.5, -25); // back up to reasonable spot to go down ramp -- adjust distance if needed since we'll just drive straight down
+    rotateInPlaceThenStop(90, 25); // rotate to face the ramp
+}
+
+void driveDownRampAndEnd() {
+    driveThenStop(30, 25); // adjust distance and speed as needed -- drives straight into end button ideally
+}
+
 void ERCMain()
 {
     // testOptosensors();
@@ -649,20 +722,15 @@ void ERCMain()
     driveToLight(25);
     bool colorIsRed = getCDSValueAndDisplayColor();
     pressLightButton(colorIsRed);
-    /* //SKELETON CODE: NEED MORE SPECIFIC VALUES
-    driveToLight(25);
-    bool colorIsRed = getCDSValueAndDisplayColor();
-    pressLightButton(colorIsRed);
-    driveToLeftLever();
-    pushLeftLeverDown();
+    /* SKELETON CODE BELOW: UNTESTED CODE */
+    // later -- go to correct lever conditionally w/ RCS
+    // driveToLeftLever();
+    // pushLeftLeverDown();
     driveToWindow();
-    openWindow();
+    openAndCloseWindow();
     // move more?
-    closeWindow();
     driveToTopOfRamp();
     driveDownRampAndEnd();
-    */
-
 
 
     /* MILESTONE 4 */
