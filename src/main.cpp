@@ -322,7 +322,7 @@ void pressLightButton(bool colorIsRed) {
         pivotThenStop(-45, 25);
         pivotThenStop(50, 25);
     }
-    driveThenStop(2, 30);
+    driveThenStopWithTimeout(2, 30, 2);
 }
 
 void followLineToEnd() {
@@ -632,7 +632,7 @@ void driveToWindow() {
     driveThenStop(3, -25); // Test this
     rotateInPlaceThenStop(-90, 20);
     correctHeading(180);
-    driveThenStopWithTimeout(9, -25, 4); // Test this (increase/decrease distance and/or timeout)
+    driveThenStopWithTimeout(9, 25, 4); // Test this (increase/decrease distance and/or timeout)
     driveThenStop(4, -25); // Test this -- backs up from wall to reasonable spot for arm
     rotateInPlaceThenStop(-90, 20);
     correctHeading(270);
