@@ -541,12 +541,13 @@ void driveToCompostBin() {
 }
 
 void driveToLight(int percent) {
-    rotateInPlaceThenStop(-110, percent);
+    rotateInPlaceThenStop(-90, percent);
     correctHeading(90);
-    leftMotor.SetPercent(percent);
-    rightMotor.SetPercent(-percent);
+
     leftEncoder.ResetCounts();
     rightEncoder.ResetCounts();
+    leftMotor.SetPercent(percent);
+    rightMotor.SetPercent(-percent);
     while (CDSCell.Value() > CDS_THRESHOLD_BLUE) {
         if (leftEncoder.Counts() > rightEncoder.Counts() + 5) {
             leftMotor.SetPercent(percent);
@@ -613,17 +614,16 @@ void driveToBottomOfRamp() {
 }
 
 void driveToTableAndDropAppleBucket() {
-    rotateInPlaceThenStop(45, 16);
-    driveThenStop(3, 25);
-    rotateInPlaceThenStop(-45, 16);
-    moveLargeArmInches(3.5);
-    driveThenStop(2.75, 25);
-    Sleep(.1);
-    leftMotor.SetPercent(16);
-    rightMotor.SetPercent(-16);
-    Sleep(.5);
-    moveLargeArmInches(-.75);
-    driveThenStop(3, -25);
+    rotateInPlaceThenStop(90, 16);
+    driveThenStopWithTimeout(6, 28, 3.5);
+    driveThenStop(2, -16);
+    rotateInPlaceThenStop(-90, 16);
+    correctHeading(0);
+    moveLargeArmInches(3.75);
+    driveThenStopWithTimeout(8, 25, 3);
+    moveLargeArmInches(-.8);
+    Sleep(.25);
+    driveThenStop(2.75, -25);
 }
 
 void driveToWindow() {
