@@ -614,12 +614,12 @@ void driveToBottomOfRamp() {
 }
 
 void driveToTableAndDropAppleBucket() {
+    moveLargeArmInches(3.75);
     rotateInPlaceThenStop(90, 16);
     driveThenStopWithTimeout(6, 28, 3.5);
     driveThenStop(2, -16);
     rotateInPlaceThenStop(-90, 16);
     correctHeading(0);
-    moveLargeArmInches(3.75);
     driveThenStopWithTimeout(8, 25, 3);
     moveLargeArmInches(-.8);
     Sleep(.25);
