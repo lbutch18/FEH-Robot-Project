@@ -204,7 +204,8 @@ void pivotThenStop(float degrees, int percent) {
         rightMotor.SetPercent(0);
     }
     
-    while ((leftEncoder.Counts() + rightEncoder.Counts()) / 2.0 < counts) {
+    float startTime = TimeNow();
+    while ((leftEncoder.Counts() + rightEncoder.Counts()) / 2.0 < counts && TimeNow() - startTime < 8.0) {
         LCD.Clear();
         LCD.WriteLine(leftEncoder.Counts());
         LCD.WriteLine(rightEncoder.Counts());
@@ -533,10 +534,10 @@ void correctX(float targetX) {
 }
 
 void driveToCompostBin() {
-    driveThenStop(5.35, 16);
+    driveThenStop(5.6, 16);
     pivotThenStop(-37.75, 16);
-    // correctHeading(90);
-    driveThenStop(12.5, 20);
+    correctHeading(90);
+    driveThenStopWithTimeout(12.5, 20, 25);
     pivotThenStop(-13.5, 16);
 }
 
@@ -548,7 +549,8 @@ void driveToLight(int percent) {
     rightEncoder.ResetCounts();
     leftMotor.SetPercent(percent);
     rightMotor.SetPercent(-percent);
-    while (CDSCell.Value() > CDS_THRESHOLD_BLUE) {
+    float start = TimeNow();
+    while (CDSCell.Value() > CDS_THRESHOLD_BLUE && TimeNow() - start < 10.0) {
         if (leftEncoder.Counts() > rightEncoder.Counts() + 5) {
             leftMotor.SetPercent(percent);
             rightMotor.SetPercent(-percent - 4);
@@ -592,6 +594,7 @@ void driveToAppleBucket() {
 }
 
 void pickUpAppleBucket() {
+    moveLargeArmInches(1.5);
     driveThenStop(4, 20);
     correctX(13.25);
     correctHeading(90);
@@ -623,7 +626,7 @@ void driveToTableAndDropAppleBucket() {
     driveThenStopWithTimeout(8, 25, 3);
     moveLargeArmInches(-.8);
     Sleep(.25);
-    driveThenStop(2.75, -25);
+    driveThenStop(3, -25);
 }
 
 void driveToWindow() {
@@ -640,18 +643,18 @@ void driveToWindow() {
 }
 
 void moveSmallArm(float seconds) {
-    if (seconds < 0) {
-        smallArm.SetDegree(105);
+    if (seconds > 0) {
+        smallArm.SetDegree(93);
     } else {
-        smallArm.SetDegree(75);
+        smallArm.SetDegree(76);
     }
-    Sleep(fabs(seconds)); // Adjust sleep time based on arm speed
-    smallArm.SetDegree(90);
+    Sleep(fabs(seconds));
+    smallArm.SetDegree(86);
 }
 
 void openAndCloseWindow() {
     /* CLOSE WINDOW */
-    moveSmallArm(1); // moves small arm for one second, see above -- may need to reverse direction and also need to make sure degree values are correct in the actual function (continuous servo uses degrees instead of percents, 0% should be 90 deg theoretically)
+    moveSmallArm(.55); // moves small arm for one second, see above -- may need to reverse direction and also need to make sure degree values are correct in the actual function (continuous servo uses degrees instead of percents, 0% should be 90 deg theoretically)
 
     leftEncoder.ResetCounts();
     rightEncoder.ResetCounts();
@@ -674,14 +677,14 @@ void openAndCloseWindow() {
     Sleep(.2);
 
     /* OPEN WINDOW */
-    moveSmallArm(-1); // move small arm back to original position -- again may need to reverse direction and adjust degree values
+    moveSmallArm(-.55); // move small arm back to original position -- again may need to reverse direction and adjust degree values
     driveThenStop(2, -25);
-    moveSmallArm(1); // reopen arm
+    moveSmallArm(.55); // reopen arm
 
     driveThenStop(10, 25); // drive forward to close window -- will almost definitely need to adjust distance
 
     Sleep(.2);
-    moveSmallArm(-1); // move small arm back to original position -- again may need to reverse direction and adjust degree values
+    moveSmallArm(-.55); // move small arm back to original position -- again may need to reverse direction and adjust degree values
 
     // See how thrown off heading is if we get stuck on the end here, could rotate, drive rerotate, check heading
 }
@@ -704,7 +707,6 @@ void ERCMain()
 
     RCS.InitializeTouchMenu("1130D4YKU");
     // RCS readings, light readings, etc.
-    // WaitForFinalAction();
     // RCS.DisableRateLimit();
     // int x, y;
     // 30 SECOND TIMEOUT MAX
