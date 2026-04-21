@@ -684,7 +684,8 @@ void openAndCloseWindow() {
     leftMotor.Stop();
     rightMotor.Stop();
     Sleep(.2);
-    driveThenStop(25, -2);
+    driveThenStop(2, -25);
+    moveSmallArm(-.55);
     correctHeading(270);
 
     // See how thrown off heading is if we get stuck on the end here, could rotate, drive rerotate, check heading
