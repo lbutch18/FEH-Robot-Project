@@ -9,7 +9,7 @@
 
 #define COUNTS_PER_INCH 33.7408479392
 #define COUNTS_PER_DEGREE 2.3275
-#define CDS_THRESHOLD_RED 1.45
+#define CDS_THRESHOLD_RED 1.55
 #define CDS_THRESHOLD_BLUE 2.5
 #define SECONDS_PER_INCH 1.0 // Adjust based on arm speed
 #define INCHES_PER_COORD_X 1
@@ -246,7 +246,7 @@ void inversePivotThenStop(float degrees, int percent) {
 }
 
 void driveUpRamp() {
-    driveThenStop(28, 35);
+    driveThenStop(28, 40);
 }
 
 void followLineOnce(int straightPercent) {
@@ -327,15 +327,15 @@ void followLineToLight() {
 void pressLightButton(bool colorIsRed) {
     if (colorIsRed) {
         // drive right to align with red button
-        pivotThenStop(45, 25);
-        pivotThenStop(-50, 25);
+        pivotThenStop(40, 25);
+        pivotThenStop(-40, 25);
     }
     else {
         //drive left to align with blue button
         pivotThenStop(-45, 25);
         pivotThenStop(50, 25);
     }
-    driveThenStopWithTimeout(2, 30, 2);
+    driveThenStopWithTimeout(3, 30, 2);
 }
 
 void followLineToEnd() {
@@ -367,9 +367,9 @@ void testRCS() {
 
 void moveLargeArmInches(float inches) {
     if (inches < 0) {
-        largeArm.SetPercent(-35);
+        largeArm.SetPercent(-45);
     } else {
-        largeArm.SetPercent(35);
+        largeArm.SetPercent(45);
     }
     Sleep(fabs(inches) * SECONDS_PER_INCH); // Adjust sleep time based on arm speed
     largeArm.Stop();
@@ -463,10 +463,10 @@ void driveToTargetAfterCompost(float targetX, float targetY, float angleToleranc
     LCD.WriteLine("Rotation: ");
     LCD.WriteLine(rotation);
             
-    rotateInPlaceThenStop(rotation, 16);
+    rotateInPlaceThenStop(rotation, 25);
     correctHeading(faceTargetHeading);
     
-    driveThenStop(distance - .35, 28);
+    driveThenStop(distance - .45, 28);
     Sleep(.25);
 }
 
@@ -544,16 +544,15 @@ void driveToCompostBin() {
     rightMotor.SetPercent(-20);
     Sleep(.1);
     driveThenStopWithTimeout(12.8, 20, 25);
-    pivotThenStop(-13.5, 16);
+    pivotThenStop(-13.5, 25);
 }
 
 void driveToLight(int percent) {
-    rotateInPlaceThenStop(-90, percent);
-    correctHeading(90);
+    rotateInPlaceThenStop(-91.5, percent);
 
     leftEncoder.ResetCounts();
     rightEncoder.ResetCounts();
-    leftMotor.SetPercent(percent);
+    leftMotor.SetPercent(percent + 3);
     rightMotor.SetPercent(-percent);
     float start = TimeNow();
     while (CDSCell.Value() > CDS_THRESHOLD_BLUE && TimeNow() - start < 6.0) {
@@ -590,24 +589,22 @@ void spinCompostBin() {
 }
 
 void driveToAppleBucket() {
-    driveToTargetAfterCompost(17.25, 19.1, .67, .25);
+    driveToTargetAfterCompost(13.25, 19.1, .67, .25);
     // rotateInPlaceThenStop(130, 16);
     // driveThenStop(12.35, 30);
-    rotateInPlaceThenStop(-35, 16);
+    rotateInPlaceThenStop(-20, 30);
     correctHeading(0);
     correctY(19.1);
-    rotateInPlaceThenStop(-90, 16);
-    correctHeading(90);
+    rotateInPlaceThenStop(-90, 30);
 }
 
 void pickUpAppleBucket() {
-    moveLargeArmInches(1.175);
-    driveThenStop(4, 20);
     correctX(13.25);
     correctHeading(90);
-    driveThenStopWithTimeout(3.5, 20, 3);
+    moveLargeArmInches(1.0);
+    driveThenStopWithTimeout(3.5, 25, 3);
     Sleep(.35);
-    moveLargeArmInches(2.25);
+    moveLargeArmInches(3.5);
     Sleep(.35);
 }
 
@@ -622,50 +619,48 @@ void driveToBottomOfRamp() {
 }
 
 void driveToTableAndDropAppleBucket() {
-    moveLargeArmInches(3.75);
-    rotateInPlaceThenStop(90, 16);
-    driveThenStopWithTimeout(6, 28, 3.5);
-    driveThenStop(1.5, -16);
-    rotateInPlaceThenStop(-90, 16);
-    correctHeading(0);
-    driveThenStopWithTimeout(8, 25, 3);
-    moveLargeArmInches(-1.1);
+    rotateInPlaceThenStop(90, 25);
+    driveThenStopWithTimeout(6, 32, 2.75);
+    driveThenStop(1.35, -25);
+    rotateInPlaceThenStop(-90, 25);
+    driveThenStopWithTimeout(10, 25, 3.5);
+    moveLargeArmInches(-.9);
     Sleep(.25);
-    driveThenStop(3.15, -25);
+    driveThenStop(3.25, -25);
 }
 
 void driveToWindow() {
     /* Goal is to run into window / flowerbox to align Y coord since we 
     just came from button press which is inexact */
-    driveThenStop(2, -25); // Test this
-    rotateInPlaceThenStop(90, 20);
+    driveThenStop(1.7, -25); // Test this
+    rotateInPlaceThenStop(90, 25);
     correctHeading(0);
     driveThenStopWithTimeout(15, -25, 7); // Test this (increase/decrease distance and/or timeout)
-    driveThenStop(4.5, 25); // Test this -- backs up from wall to reasonable spot for arm
-    rotateInPlaceThenStop(90, 20);
+    driveThenStop(4.8, 25); // Test this -- backs up from wall to reasonable spot for arm
+    rotateInPlaceThenStop(90, 25);
     correctHeading(270);
-    driveThenStop(6.5, 25); // test this -- drives just past window handle
+    driveThenStop(6.75, 25); // test this -- drives just past window handle
 }
 
 void moveSmallArm(float seconds) {
     if (seconds > 0) {
         smallArm.SetDegree(65);
     } else {
-        smallArm.SetDegree(100);
+        smallArm.SetDegree(110);
     }
     Sleep(fabs(seconds));
-    smallArm.SetDegree(83);
+    smallArm.SetDegree(87);
 }
 
 void openAndCloseWindow() {
     /* CLOSE WINDOW */
-    moveSmallArm(.55); // moves small arm for one second, see above -- may need to reverse direction and also need to make sure degree values are correct in the actual function (continuous servo uses degrees instead of percents, 0% should be 90 deg theoretically)
+    moveSmallArm(.55);
 
     leftEncoder.ResetCounts();
     rightEncoder.ResetCounts();
     leftMotor.SetPercent(-25);
-    rightMotor.SetPercent(32);
-    while ((leftEncoder.Counts() + rightEncoder.Counts()) / 2.0 < COUNTS_PER_INCH * 5); // drive backward with counterrotation until window sensor is triggered
+    rightMotor.SetPercent(35);
+    while ((leftEncoder.Counts() + rightEncoder.Counts()) / 2.0 < COUNTS_PER_INCH * 6.55); // drive backward with counterrotation until window sensor is triggered
     leftMotor.Stop();
     rightMotor.Stop();
     Sleep(.2);
@@ -674,17 +669,17 @@ void openAndCloseWindow() {
     driveThenStop(1, 25);
     moveSmallArm(-.55); // move small arm back to original position -- again may need to reverse direction and adjust degree values
     driveThenStop(3, -25);
-    moveSmallArm(.55); // reopen arm
+    moveSmallArm(.5); // reopen arm
 
     leftEncoder.ResetCounts();
     rightEncoder.ResetCounts();
     leftMotor.SetPercent(25);
-    rightMotor.SetPercent(-32);
-    while((leftEncoder.Counts() + rightEncoder.Counts()) / 2.0 < COUNTS_PER_INCH * 6);
+    rightMotor.SetPercent(-35);
+    while((leftEncoder.Counts() + rightEncoder.Counts()) / 2.0 < COUNTS_PER_INCH * 7.67);
     leftMotor.Stop();
     rightMotor.Stop();
     Sleep(.2);
-    driveThenStop(2, -25);
+    driveThenStop(1.5, -25);
     moveSmallArm(-.55);
     correctHeading(270);
 
@@ -693,14 +688,16 @@ void openAndCloseWindow() {
 
 void driveToTopOfRamp() {
     // literally just ram ts into the wall and back up/rotate
-    driveThenStop(10, 30);
-    driveThenStopWithTimeout(6, 25, 3); // adjust distance and timeout as needed
-    driveThenStop(1.75, -25); // back up to reasonable spot to go down ramp -- adjust distance if needed since we'll just drive straight down
+    driveThenStopWithTimeout(20, 30, 4.5);
+    driveThenStop(1, -25);
     rotateInPlaceThenStop(90, 25); // rotate to face the ramp
 }
 
 void driveDownRampAndEnd() {
-    driveThenStop(30, 30); // adjust distance and speed as needed -- drives straight into end button ideally
+    driveThenStop(25, 30); // adjust distance and speed as needed -- drives straight into end button ideally
+    pivotThenStop(50, 30);
+    pivotThenStop(-67, 30);
+    driveThenStop(8, 30);
 }
 
 void ERCMain()
@@ -718,22 +715,20 @@ void ERCMain()
     activateStartButton();
     driveToCompostBin();
     spinCompostBin();
-    rotateInPlaceThenStop(26, 16);
+    rotateInPlaceThenStop(26, 25);
     driveToAppleBucket();
     pickUpAppleBucket();
     driveToBottomOfRamp();
     driveUpRamp();
     driveToTableAndDropAppleBucket();
+    // later -- go to correct lever conditionally w/ RCS
+    // driveToTargetForLevers();
+    // pushLeftLeverDown();
     driveToLight(25);
     bool colorIsRed = getCDSValueAndDisplayColor();
     pressLightButton(colorIsRed);
-    /* SKELETON CODE BELOW: UNTESTED CODE */
-    // later -- go to correct lever conditionally w/ RCS
-    // driveToLeftLever();
-    // pushLeftLeverDown();
     driveToWindow();
     openAndCloseWindow();
-    // move more?
     driveToTopOfRamp();
     driveDownRampAndEnd();
 
