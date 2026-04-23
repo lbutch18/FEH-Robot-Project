@@ -335,7 +335,7 @@ void pressLightButton(bool colorIsRed) {
         pivotThenStop(-45, 25);
         pivotThenStop(50, 25);
     }
-    driveThenStopWithTimeout(3, 30, 2);
+    driveThenStopWithTimeout(3, 28, 2);
 }
 
 void followLineToEnd() {
@@ -370,6 +370,16 @@ void moveLargeArmInches(float inches) {
         largeArm.SetPercent(-45);
     } else {
         largeArm.SetPercent(45);
+    }
+    Sleep(fabs(inches) * SECONDS_PER_INCH); // Adjust sleep time based on arm speed
+    largeArm.Stop();
+}
+
+void moveLargeArmSecondsFast(float inches) {
+    if (inches < 0) {
+        largeArm.SetPercent(-60);
+    } else {
+        largeArm.SetPercent(60);
     }
     Sleep(fabs(inches) * SECONDS_PER_INCH); // Adjust sleep time based on arm speed
     largeArm.Stop();
@@ -543,19 +553,81 @@ void driveToCompostBin() {
     leftMotor.SetPercent(25);
     rightMotor.SetPercent(-20);
     Sleep(.1);
-    driveThenStopWithTimeout(12.8, 20, 25);
+    driveThenStopWithTimeout(12.8, 20, 30);
     pivotThenStop(-13.5, 25);
 }
 
+void driveToTargetForLight() {
+    const float distanceTolerance = .25;
+    const float targetHeading = 90;
+    const float targetX = 17.0;
+    const float targetY = 49.0;
+
+    Sleep(.25);
+    LCD.Clear();
+        
+    // Get position and check distance
+    RCSPose* pose = RCS.RequestPosition();
+    for (int i = 0; i < 2; i++) {
+        float time = TimeNow();
+        while (RCS.Position() == nullptr && TimeNow() - time < 2);
+        if (pose != nullptr || pose->x < 0) {
+            break;
+        }
+        pose = RCS.RequestPosition();
+        Sleep(.25);
+    }
+    if (pose == nullptr || pose->x < 0) {
+        LCD.WriteLine("Position not ready");
+        return;
+    }
+        
+    float currentX = pose->x;
+    float currentY = pose->y;
+    float currentHeading = pose->heading;
+        
+    LCD.WriteLine("Current pos: ");
+    LCD.WriteLine(currentX);
+    LCD.WriteLine(currentY);
+    LCD.WriteLine(currentHeading);
+        
+    float distance = sqrt(pow(targetX - currentX, 2) + pow(targetY - currentY, 2));
+    if (distance < distanceTolerance) {
+        return;
+    }
+        
+    float faceTargetHeading = atan2(currentX - targetX, targetY - currentY) * 180 / M_PI;
+    if (faceTargetHeading < 0) {
+        faceTargetHeading += 360;
+    }
+    float rotation = -getNormalizedRotation(currentHeading, faceTargetHeading);
+    LCD.WriteLine("Rotation: ");
+    LCD.WriteLine(rotation);
+            
+    rotateInPlaceThenStop(rotation, 30);
+    correctHeading(faceTargetHeading);
+    
+    driveThenStop(distance - .45, 25);
+    
+    correctHeading(180);
+    correctY(targetY);
+    correctY(targetY);
+    
+    rotateInPlaceThenStop(90, 30);
+    correctHeading(targetHeading);
+}
+
 void driveToLight(int percent) {
-    rotateInPlaceThenStop(-91.5, percent);
+    rotateInPlaceThenStop(45, 30);
+    driveThenStop(3.5, -30);
+    driveToTargetForLight();
 
     leftEncoder.ResetCounts();
     rightEncoder.ResetCounts();
     leftMotor.SetPercent(percent + 3);
     rightMotor.SetPercent(-percent);
     float start = TimeNow();
-    while (CDSCell.Value() > CDS_THRESHOLD_BLUE && TimeNow() - start < 6.0) {
+    while (CDSCell.Value() > CDS_THRESHOLD_BLUE && TimeNow() - start < 4.0) {
         if (leftEncoder.Counts() > rightEncoder.Counts() + 5) {
             leftMotor.SetPercent(percent);
             rightMotor.SetPercent(-percent - 3);
@@ -619,25 +691,25 @@ void driveToBottomOfRamp() {
 }
 
 void driveToTableAndDropAppleBucket() {
-    rotateInPlaceThenStop(90, 25);
+    rotateInPlaceThenStop(90, 30);
     driveThenStopWithTimeout(6, 32, 2.75);
-    driveThenStop(1.35, -25);
-    rotateInPlaceThenStop(-90, 25);
-    driveThenStopWithTimeout(10, 25, 3.5);
+    driveThenStop(1.35, -30);
+    rotateInPlaceThenStop(-90, 30);
+    driveThenStopWithTimeout(10, 30, 2.5);
     moveLargeArmInches(-.9);
     Sleep(.25);
-    driveThenStop(3.25, -25);
+    driveThenStop(5, -30);
 }
 
 void driveToWindow() {
     /* Goal is to run into window / flowerbox to align Y coord since we 
     just came from button press which is inexact */
-    driveThenStop(1.7, -25); // Test this
-    rotateInPlaceThenStop(90, 25);
+    driveThenStop(1.7, -30); // Test this
+    rotateInPlaceThenStop(90, 30);
     correctHeading(0);
-    driveThenStopWithTimeout(15, -25, 7); // Test this (increase/decrease distance and/or timeout)
+    driveThenStopWithTimeout(15, -30, 5.5); // Test this (increase/decrease distance and/or timeout)
     driveThenStop(4.8, 25); // Test this -- backs up from wall to reasonable spot for arm
-    rotateInPlaceThenStop(90, 25);
+    rotateInPlaceThenStop(90, 30);
     correctHeading(270);
     driveThenStop(6.75, 25); // test this -- drives just past window handle
 }
@@ -695,9 +767,90 @@ void driveToTopOfRamp() {
 
 void driveDownRampAndEnd() {
     driveThenStop(25, 30); // adjust distance and speed as needed -- drives straight into end button ideally
-    pivotThenStop(50, 30);
-    pivotThenStop(-67, 30);
-    driveThenStop(8, 30);
+    pivotThenStop(40, 35);
+    pivotThenStop(-50, 35);
+    driveThenStop(8, 35);
+}
+
+// 0 left, 1 middle, 2 right
+void driveToTargetForLevers(int lever) {
+    rotateInPlaceThenStop(-45, 30);
+    driveThenStop(5, 30);
+
+    const float distanceTolerance = .25;
+    const float targetHeading = 43;
+
+    Sleep(.25);
+    LCD.Clear();
+        
+    // Get position and check distance
+    RCSPose* pose = RCS.RequestPosition();
+    for (int i = 0; i < 2; i++) {
+        float time = TimeNow();
+        while (RCS.Position() == nullptr && TimeNow() - time < 2);
+        if (pose != nullptr || pose->x < 0) {
+            break;
+        }
+        pose = RCS.RequestPosition();
+        Sleep(.25);
+    }
+    if (pose == nullptr || pose->x < 0) {
+        LCD.WriteLine("Position not ready");
+        return;
+    }
+        
+    float currentX = pose->x;
+    float currentY = pose->y;
+    float currentHeading = pose->heading;
+        
+    LCD.WriteLine("Current pos: ");
+    LCD.WriteLine(currentX);
+    LCD.WriteLine(currentY);
+    LCD.WriteLine(currentHeading);
+
+    float targetX, targetY;
+    if (lever == 0) {
+        targetX = 14;
+        targetY = 56.75;
+    } else if (lever == 1) {
+        targetX = 17.8;
+        targetY = 59;
+    } else { // lever == 2
+        targetX = 21.61;
+        targetY = 63;
+    }
+        
+    float distance = sqrt(pow(targetX - currentX, 2) + pow(targetY - currentY, 2));
+    if (distance < distanceTolerance) {
+        return;
+    }
+        
+    float faceTargetHeading = atan2(currentX - targetX, targetY - currentY) * 180 / M_PI;
+    if (faceTargetHeading < 0) {
+        faceTargetHeading += 360;
+    }
+    float rotation = -getNormalizedRotation(currentHeading, faceTargetHeading);
+    LCD.WriteLine("Rotation: ");
+    LCD.WriteLine(rotation);
+            
+    rotateInPlaceThenStop(rotation, 25);
+    correctHeading(faceTargetHeading);
+    
+    driveThenStop(distance - 1.25, 30);
+    
+    correctHeading(targetHeading);
+}
+
+void flipLever() {
+    driveThenStopWithTimeout(3.5, 23, 3);
+    moveLargeArmSecondsFast(-2.75);
+    driveThenStop(2, -25);
+    Sleep(4.5);
+    moveLargeArmInches(-0.5);
+    driveThenStopWithTimeout(2, 25, 2.5);
+    moveLargeArmSecondsFast(1.0);
+    driveThenStop(4, -30);
+    moveLargeArmSecondsFast(1.0);
 }
 
 void ERCMain()
@@ -720,10 +873,9 @@ void ERCMain()
     pickUpAppleBucket();
     driveToBottomOfRamp();
     driveUpRamp();
-    driveToTableAndDropAppleBucket();
-    // later -- go to correct lever conditionally w/ RCS
-    // driveToTargetForLevers();
-    // pushLeftLeverDown();
+    driveToTableAndDropAppleBucket(); // update back-up distance
+    driveToTargetForLevers(RCS.GetLever());
+    flipLever();
     driveToLight(25);
     bool colorIsRed = getCDSValueAndDisplayColor();
     pressLightButton(colorIsRed);
